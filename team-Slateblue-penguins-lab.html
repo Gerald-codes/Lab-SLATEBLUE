@@ -129,6 +129,7 @@ pre > code.sourceCode > span > a:first-child::before { text-decoration: underlin
   <ul class="collapse">
   <li><a href="#verifier-task-check-for-consistency-with-horst-hill-and-gorman-2022" id="toc-verifier-task-check-for-consistency-with-horst-hill-and-gorman-2022" class="nav-link" data-scroll-target="#verifier-task-check-for-consistency-with-horst-hill-and-gorman-2022">Verifier Task — Check for consistency with Horst, Hill and Gorman (2022)</a></li>
   </ul></li>
+  <li><a href="#roles-and-contributions" id="toc-roles-and-contributions" class="nav-link" data-scroll-target="#roles-and-contributions">4.2 Roles and Contributions</a></li>
   </ul>
 </nav>
 </div>
@@ -1073,17 +1074,36 @@ Expected from Horst et al. (2022):</code></pre>
 </div>
 <p><strong>Are the team’s observations consistent with Horst et al.&nbsp;(2022)?</strong></p>
 <ul>
-<li><strong>Pooled correlation sign matches:</strong> Horst et al.&nbsp;(2022) report a pooled Pearson correlation of <strong>−0.235</strong> (p &lt; 0.001) between bill length and bill depth across all species [web:2][web:22]. The team’s computed value should reproduce this figure exactly, confirming that the negative pooled trend observed in Section 3.4a is consistent with the published result.</li>
-<li><strong>Within-species correlations are all positive, matching the paper:</strong> Horst et al.&nbsp;(2022) report within-species correlations of <strong>+0.391</strong> (Adélie), <strong>+0.654</strong> (Chinstrap), and <strong>+0.643</strong> (Gentoo) [web:22]. All three are positive, directly corroborating the team’s finding in Section 3.4f that per-species regression lines slope upward — the opposite direction to the pooled trend.</li>
-<li><strong>Simpson’s Paradox is explicitly identified in the paper:</strong> Horst et al.
+<li><p><strong>Pooled correlation sign matches:</strong> Horst et al.&nbsp;(2022) report a pooled Pearson correlation of <strong>−0.235</strong> (p &lt; 0.001) between bill length and bill depth across all species [web:2][web:22]. The team’s computed value should reproduce this figure exactly, confirming that the negative pooled trend observed in Section 3.4a is consistent with the published result.</p></li>
+<li><p><strong>Within-species correlations are all positive, matching the paper:</strong> Horst et al.&nbsp;(2022) report within-species correlations of <strong>+0.391</strong> (Adélie), <strong>+0.654</strong> (Chinstrap), and <strong>+0.643</strong> (Gentoo) [web:22]. All three are positive, directly corroborating the team’s finding in Section 3.4f that per-species regression lines slope upward — the opposite direction to the pooled trend.</p></li>
+<li><p><strong>Simpson’s Paradox is explicitly identified in the paper:</strong> Horst et al.</p>
 <ol start="2022" type="1">
 <li>present the bill length vs.&nbsp;bill depth relationship as a deliberate Simpson’s Paradox example in the <code>penguins</code> dataset [web:2], validating the team’s use of this term in Section 3.4f and the closing summary in Section 3.5.</li>
 </ol></li>
-<li><strong>Minor numerical differences are expected:</strong> The team’s per-species correlations may differ very slightly from the published values depending on whether <code>drop_na()</code> was applied consistently. Small discrepancies (e.g., ±0.01) are not a concern — what matters is that the <strong>signs match</strong> and the magnitude is in the same range, which the <code>stopifnot()</code> check in the previous verifier task already confirmed.</li>
+<li><p><strong>Minor numerical differences are expected:</strong> The team’s per-species correlations may differ very slightly from the published values depending on whether <code>drop_na()</code> was applied consistently. Small discrepancies (e.g., ±0.01) are not a concern — what matters is that the <strong>signs match</strong> and the magnitude is in the same range, which the <code>stopifnot()</code> check in the previous verifier task already confirmed.</p>
+<h1 id="reflect-on-ai-use">4.1 Reflect on AI Use</h1>
+<p><strong>Tool used:</strong> Perplexity AI (powered by Claude Sonnet 4.6) was used throughout this lab to assist with code generation, plot design decisions, and written discussion drafting.</p>
+<p>When designing the jitter plot in Section 3.2e, the AI correctly advised setting <code>width = 0</code> in <code>geom_jitter()</code> to suppress horizontal displacement entirely, preserving each point’s exact x-axis position to reflect the penguin’s true measured bill length. This was a genuinely helpful design principle — horizontal jitter would have introduced positional noise along the measurement axis and undermined the accuracy of any x-axis reading, which the AI flagged unprompted.</p>
+<p>Incorrect response: In Section 3.1, the AI initially generated the data-cleaning code using shortened column names <code>bill_len</code> and <code>bill_dep</code> instead of the correct <code>bill_length_mm</code> and <code>bill_depth_mm</code> used by the <code>palmerpenguins</code> package. The AI had incorrectly assumed a shortened naming convention from R’s newer built-in <code>datasets</code> version of the penguins data (available from R 4.5+), which does not apply when <code>library(palmerpenguins)</code> is loaded. The error was identified immediately when Quarto rendering halted with a <code>Can't select columns that don't exist</code> error from <code>dplyr::select()</code>. The team corrected the problem by consulting the <code>palmerpenguins</code> package documentation (<code>?penguins</code>) to confirm the exact column names, then replacing all occurrences of <code>bill_len</code> and <code>bill_dep</code> throughout the QMD with <code>bill_length_mm</code> and <code>bill_depth_mm</code> respectively.</p></li>
+</ul>
+</section>
+</section>
+<section id="roles-and-contributions" class="level1">
+<h1>4.2 Roles and Contributions</h1>
+<ul>
+<li><p><strong>Adam: Coder</strong><br>
+Adam typed and edited the canonical QMD file, managed the code chunks, ensured that the file paths were project-relative, and rendered the final HTML output.</p></li>
+<li><p><strong>Bao Quan: AI Liaison</strong><br>
+Bao Quan used the team’s chosen chat-based AI tool, recorded the AI interactions in the AI log, identified useful AI suggestions, and checked for any AI responses that were incorrect, incomplete, or unsuitable for the lab requirements.</p></li>
+<li><p><strong>Jun Kiat: Navigator</strong><br>
+Jun Kiat read the task requirements, kept the team on track, guided the overall coding strategy, and checked that all required sections of the lab were attempted.</p></li>
+<li><p><strong>Jia Jia: Constructive Critic and Reporter</strong><br>
+Jia Jia reviewed the explanatory text, verifier notes, AI-related comments, and final QMD structure for clarity, language, formatting, and completeness. Jia Jia also prepared the Markdown explanations and was responsible for explaining the transformation steps, AI use, and verification reasoning during the checkpoint.</p></li>
+<li><p><strong>Gerald: Verifier</strong><br>
+Gerald checked that the cleaned data had the expected rows, columns, units, missing values, and join behaviour. Gerald also reviewed the verifier tasks, including row counts, animal categories, Cambodia’s missing values, Malaysia’s trailing space, join order, and the <code>waldo::compare()</code> outputs.</p></li>
 </ul>
 <!-- -->
 
-</section>
 </section>
 
 </main>
@@ -2723,6 +2743,47 @@ Expected from Horst et al. (2022):</code></pre>
 <span id="cb73-1240"><a href="#cb73-1240" aria-hidden="true" tabindex="-1"></a>  ±0.01) are not a concern — what matters is that the **signs match** and</span>
 <span id="cb73-1241"><a href="#cb73-1241" aria-hidden="true" tabindex="-1"></a>  the magnitude is in the same range, which the <span class="in">`stopifnot()`</span> check in the</span>
 <span id="cb73-1242"><a href="#cb73-1242" aria-hidden="true" tabindex="-1"></a>  previous verifier task already confirmed.</span>
+<span id="cb73-1243"><a href="#cb73-1243" aria-hidden="true" tabindex="-1"></a></span>
+<span id="cb73-1244"><a href="#cb73-1244" aria-hidden="true" tabindex="-1"></a></span>
+<span id="cb73-1245"><a href="#cb73-1245" aria-hidden="true" tabindex="-1"></a>  # 4.1 Reflect on AI Use</span>
+<span id="cb73-1246"><a href="#cb73-1246" aria-hidden="true" tabindex="-1"></a>**Tool used:** Perplexity AI (powered by Claude Sonnet 4.6) was used throughout this lab to assist with code generation, plot design decisions, and written discussion drafting.</span>
+<span id="cb73-1247"><a href="#cb73-1247" aria-hidden="true" tabindex="-1"></a></span>
+<span id="cb73-1248"><a href="#cb73-1248" aria-hidden="true" tabindex="-1"></a>  When designing the jitter plot in Section 3.2e,</span>
+<span id="cb73-1249"><a href="#cb73-1249" aria-hidden="true" tabindex="-1"></a>the AI correctly advised setting <span class="in">`width = 0`</span> in <span class="in">`geom_jitter()`</span> to suppress</span>
+<span id="cb73-1250"><a href="#cb73-1250" aria-hidden="true" tabindex="-1"></a>horizontal displacement entirely, preserving each point's exact x-axis</span>
+<span id="cb73-1251"><a href="#cb73-1251" aria-hidden="true" tabindex="-1"></a>position to reflect the penguin's true measured bill length. This was a</span>
+<span id="cb73-1252"><a href="#cb73-1252" aria-hidden="true" tabindex="-1"></a>genuinely helpful design principle — horizontal jitter would have introduced</span>
+<span id="cb73-1253"><a href="#cb73-1253" aria-hidden="true" tabindex="-1"></a>positional noise along the measurement axis and undermined the accuracy of</span>
+<span id="cb73-1254"><a href="#cb73-1254" aria-hidden="true" tabindex="-1"></a>any x-axis reading, which the AI flagged unprompted.</span>
+<span id="cb73-1255"><a href="#cb73-1255" aria-hidden="true" tabindex="-1"></a></span>
+<span id="cb73-1256"><a href="#cb73-1256" aria-hidden="true" tabindex="-1"></a>  Incorrect response: In Section 3.1, the AI initially</span>
+<span id="cb73-1257"><a href="#cb73-1257" aria-hidden="true" tabindex="-1"></a>generated the data-cleaning code using shortened column names <span class="in">`bill_len`</span> and</span>
+<span id="cb73-1258"><a href="#cb73-1258" aria-hidden="true" tabindex="-1"></a><span class="in">`bill_dep`</span> instead of the correct <span class="in">`bill_length_mm`</span> and <span class="in">`bill_depth_mm`</span> used</span>
+<span id="cb73-1259"><a href="#cb73-1259" aria-hidden="true" tabindex="-1"></a>by the <span class="in">`palmerpenguins`</span> package. The AI had incorrectly assumed a shortened</span>
+<span id="cb73-1260"><a href="#cb73-1260" aria-hidden="true" tabindex="-1"></a>naming convention from R's newer built-in <span class="in">`datasets`</span> version of the penguins</span>
+<span id="cb73-1261"><a href="#cb73-1261" aria-hidden="true" tabindex="-1"></a>data (available from R 4.5+), which does not apply when <span class="in">`library(palmerpenguins)`</span></span>
+<span id="cb73-1262"><a href="#cb73-1262" aria-hidden="true" tabindex="-1"></a>is loaded. The error was identified immediately when Quarto rendering halted</span>
+<span id="cb73-1263"><a href="#cb73-1263" aria-hidden="true" tabindex="-1"></a>with a <span class="in">`Can't select columns that don't exist`</span> error from <span class="in">`dplyr::select()`</span>.</span>
+<span id="cb73-1264"><a href="#cb73-1264" aria-hidden="true" tabindex="-1"></a>The team corrected the problem by consulting the <span class="in">`palmerpenguins`</span> package</span>
+<span id="cb73-1265"><a href="#cb73-1265" aria-hidden="true" tabindex="-1"></a>documentation (<span class="in">`?penguins`</span>) to confirm the exact column names, then replacing</span>
+<span id="cb73-1266"><a href="#cb73-1266" aria-hidden="true" tabindex="-1"></a>all occurrences of <span class="in">`bill_len`</span> and <span class="in">`bill_dep`</span> throughout the QMD with</span>
+<span id="cb73-1267"><a href="#cb73-1267" aria-hidden="true" tabindex="-1"></a><span class="in">`bill_length_mm`</span> and <span class="in">`bill_depth_mm`</span> respectively.</span>
+<span id="cb73-1268"><a href="#cb73-1268" aria-hidden="true" tabindex="-1"></a></span>
+<span id="cb73-1269"><a href="#cb73-1269" aria-hidden="true" tabindex="-1"></a><span class="fu"># 4.2 Roles and Contributions </span></span>
+<span id="cb73-1270"><a href="#cb73-1270" aria-hidden="true" tabindex="-1"></a><span class="ss">- </span>**Adam: Coder**  </span>
+<span id="cb73-1271"><a href="#cb73-1271" aria-hidden="true" tabindex="-1"></a>  Adam typed and edited the canonical QMD file, managed the code chunks, ensured that the file paths were project-relative, and rendered the final HTML output.</span>
+<span id="cb73-1272"><a href="#cb73-1272" aria-hidden="true" tabindex="-1"></a></span>
+<span id="cb73-1273"><a href="#cb73-1273" aria-hidden="true" tabindex="-1"></a><span class="ss">- </span>**Bao Quan: AI Liaison**  </span>
+<span id="cb73-1274"><a href="#cb73-1274" aria-hidden="true" tabindex="-1"></a>  Bao Quan used the team’s chosen chat-based AI tool, recorded the AI interactions in the AI log, identified useful AI suggestions, and checked for any AI responses that were incorrect, incomplete, or unsuitable for the lab requirements.</span>
+<span id="cb73-1275"><a href="#cb73-1275" aria-hidden="true" tabindex="-1"></a></span>
+<span id="cb73-1276"><a href="#cb73-1276" aria-hidden="true" tabindex="-1"></a><span class="ss">- </span>**Jun Kiat: Navigator**  </span>
+<span id="cb73-1277"><a href="#cb73-1277" aria-hidden="true" tabindex="-1"></a>  Jun Kiat read the task requirements, kept the team on track, guided the overall coding strategy, and checked that all required sections of the lab were attempted.</span>
+<span id="cb73-1278"><a href="#cb73-1278" aria-hidden="true" tabindex="-1"></a></span>
+<span id="cb73-1279"><a href="#cb73-1279" aria-hidden="true" tabindex="-1"></a><span class="ss">- </span>**Jia Jia: Constructive Critic and Reporter**  </span>
+<span id="cb73-1280"><a href="#cb73-1280" aria-hidden="true" tabindex="-1"></a>  Jia Jia reviewed the explanatory text, verifier notes, AI-related comments, and final QMD structure for clarity, language, formatting, and completeness. Jia Jia also prepared the Markdown explanations and was responsible for explaining the transformation steps, AI use, and verification reasoning during the checkpoint.</span>
+<span id="cb73-1281"><a href="#cb73-1281" aria-hidden="true" tabindex="-1"></a></span>
+<span id="cb73-1282"><a href="#cb73-1282" aria-hidden="true" tabindex="-1"></a><span class="ss">- </span>**Gerald: Verifier**  </span>
+<span id="cb73-1283"><a href="#cb73-1283" aria-hidden="true" tabindex="-1"></a>  Gerald checked that the cleaned data had the expected rows, columns, units, missing values, and join behaviour. Gerald also reviewed the verifier tasks, including row counts, animal categories, Cambodia’s missing values, Malaysia’s trailing space, join order, and the <span class="in">`waldo::compare()`</span> outputs.</span>
 </code></pre></div><button title="Copy to Clipboard" class="code-copy-button" data-in-quarto-modal=""><i class="bi"></i></button></div>
 </div></div></div></div></div>
 </div> <!-- /content -->

@@ -1182,3 +1182,44 @@ cat(
   ±0.01) are not a concern — what matters is that the **signs match** and
   the magnitude is in the same range, which the `stopifnot()` check in the
   previous verifier task already confirmed.
+
+
+  # 4.1 Reflect on AI Use
+**Tool used:** Perplexity AI (powered by Claude Sonnet 4.6) was used throughout this lab to assist with code generation, plot design decisions, and written discussion drafting.
+
+  When designing the jitter plot in Section 3.2e,
+the AI correctly advised setting `width = 0` in `geom_jitter()` to suppress
+horizontal displacement entirely, preserving each point's exact x-axis
+position to reflect the penguin's true measured bill length. This was a
+genuinely helpful design principle — horizontal jitter would have introduced
+positional noise along the measurement axis and undermined the accuracy of
+any x-axis reading, which the AI flagged unprompted.
+
+  Incorrect response: In Section 3.1, the AI initially
+generated the data-cleaning code using shortened column names `bill_len` and
+`bill_dep` instead of the correct `bill_length_mm` and `bill_depth_mm` used
+by the `palmerpenguins` package. The AI had incorrectly assumed a shortened
+naming convention from R's newer built-in `datasets` version of the penguins
+data (available from R 4.5+), which does not apply when `library(palmerpenguins)`
+is loaded. The error was identified immediately when Quarto rendering halted
+with a `Can't select columns that don't exist` error from `dplyr::select()`.
+The team corrected the problem by consulting the `palmerpenguins` package
+documentation (`?penguins`) to confirm the exact column names, then replacing
+all occurrences of `bill_len` and `bill_dep` throughout the QMD with
+`bill_length_mm` and `bill_depth_mm` respectively.
+
+# 4.2 Roles and Contributions 
+- **Adam: Coder**  
+  Adam typed and edited the canonical QMD file, managed the code chunks, ensured that the file paths were project-relative, and rendered the final HTML output.
+
+- **Bao Quan: AI Liaison**  
+  Bao Quan used the team’s chosen chat-based AI tool, recorded the AI interactions in the AI log, identified useful AI suggestions, and checked for any AI responses that were incorrect, incomplete, or unsuitable for the lab requirements.
+
+- **Jun Kiat: Navigator**  
+  Jun Kiat read the task requirements, kept the team on track, guided the overall coding strategy, and checked that all required sections of the lab were attempted.
+
+- **Jia Jia: Constructive Critic and Reporter**  
+  Jia Jia reviewed the explanatory text, verifier notes, AI-related comments, and final QMD structure for clarity, language, formatting, and completeness. Jia Jia also prepared the Markdown explanations and was responsible for explaining the transformation steps, AI use, and verification reasoning during the checkpoint.
+
+- **Gerald: Verifier**  
+  Gerald checked that the cleaned data had the expected rows, columns, units, missing values, and join behaviour. Gerald also reviewed the verifier tasks, including row counts, animal categories, Cambodia’s missing values, Malaysia’s trailing space, join order, and the `waldo::compare()` outputs.
