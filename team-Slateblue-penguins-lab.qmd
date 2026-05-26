@@ -1184,29 +1184,28 @@ cat(
   previous verifier task already confirmed.
 
 
-  # 4.1 Reflect on AI Use
-**Tool used:** Perplexity AI (powered by Claude Sonnet 4.6) was used throughout this lab to assist with code generation, plot design decisions, and written discussion drafting.
+# 4.1 Reflect on AI Use
 
-  When designing the jitter plot in Section 3.2e,
-the AI correctly advised setting `width = 0` in `geom_jitter()` to suppress
-horizontal displacement entirely, preserving each point's exact x-axis
-position to reflect the penguin's true measured bill length. This was a
-genuinely helpful design principle — horizontal jitter would have introduced
-positional noise along the measurement axis and undermined the accuracy of
-any x-axis reading, which the AI flagged unprompted.
+**Tool used:** ChatGPT (GPT-4o) was used throughout this lab to assist with
+code generation, plot design decisions, and written discussion drafting.
 
-  Incorrect response: In Section 3.1, the AI initially
-generated the data-cleaning code using shortened column names `bill_len` and
-`bill_dep` instead of the correct `bill_len` and `bill_dep` used
-by the `palmerpenguins` package. The AI had incorrectly assumed a shortened
-naming convention from R's newer built-in `datasets` version of the penguins
-data (available from R 4.5+), which does not apply when `library(palmerpenguins)`
-is loaded. The error was identified immediately when Quarto rendering halted
-with a `Can't select columns that don't exist` error from `dplyr::select()`.
-The team corrected the problem by consulting the `palmerpenguins` package
-documentation (`?penguins`) to confirm the exact column names, then replacing
-all occurrences of `bill_len` and `bill_dep` throughout the QMD with
-`bill_len` and `bill_dep` respectively.
+When designing the jitter plot in Section 3.2e, the AI correctly advised
+setting `width = 0` in `geom_jitter()` to suppress horizontal displacement
+entirely, preserving each point's exact x-axis position to reflect the
+penguin's true measured bill length. This was a genuinely helpful design
+principle — horizontal jitter would have introduced positional noise along
+the measurement axis and undermined the accuracy of any x-axis reading,
+which the AI flagged unprompted.
+
+In Section 3.1, however, the AI initially generated the data-cleaning code
+using the `palmerpenguins` column names `bill_length_mm` and `bill_depth_mm`
+instead of the shortened names `bill_len` and `bill_dep` used by R's
+built-in `datasets::penguins` (available from R 4.5+). The error surfaced
+immediately when Quarto rendering halted with a
+`Can't select columns that don't exist` error from `dplyr::select()`. The
+team corrected the problem by consulting `?penguins` in the R console to
+confirm the exact column names in the built-in version, then updating all
+affected code chunks throughout the QMD.
 
 # 4.2 Roles and Contributions 
 - **Adam: Coder**  
