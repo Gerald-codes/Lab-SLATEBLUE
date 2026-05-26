@@ -26,7 +26,7 @@ execute:
 #| include: false
 library(tidyverse)
 library(ggbeeswarm)
-library(palmerpenguins)
+penguins <- datasets::penguins
 ```
 
 ### Size of the Dataset
@@ -62,8 +62,8 @@ glimpse(penguins)
 **Observations from the output:**
 
 - `species`, `island`, and `sex` are stored as **factors** (`<fct>`), while
-  - numeric measurements (`bill_length_mm`, `bill_depth_mm`, `flipper_length_mm`,
-  `body_mass_g`) are stored as **doubles** (`<dbl>`), and `year` as an integer (`<int>`).
+  - numeric measurements (`bill_len`, `bill_dep`, `flipper_len`,
+  `body_mass`) are stored as **doubles** (`<dbl>`), and `year` as an integer (`<int>`).
 - `head()` shows that the first several rows are all Adélie penguins from
   Torgersen island — suggesting the data is **ordered by species**, not
   randomly shuffled.
@@ -73,7 +73,7 @@ glimpse(penguins)
   particularly `bill_len`, `bill_dep`, and `sex`. Two rows appear to be
   entirely `NA` for the measurement columns, which will need to be removed
   before analysis.
-- `body_mass_g` values are in the thousands (e.g., 3750), so axis labels
+- `body_mass` values are in the thousands (e.g., 3750), so axis labels
   in plots should clearly indicate units (grams).
 
 ---
@@ -83,7 +83,7 @@ glimpse(penguins)
 ```{r}
 #| label: data-cleaning
 penguins_bill <- penguins |>
-  select(species, bill_length_mm, bill_depth_mm) |>
+  select(species, bill_len, bill_dep) |>
   drop_na()
 
 nrow(penguins_bill)
@@ -97,9 +97,9 @@ After cleaning, **342 rows** remain.
 
 ```{r}
 #| label: verify-data-cleaning
-# Count rows removed due to NA in bill_length_mm or bill_depth_mm
+# Count rows removed due to NA in bill_len or bill_dep
 rows_removed <- penguins |>
-  filter(is.na(bill_length_mm) | is.na(bill_depth_mm)) |>
+  filter(is.na(bill_len) | is.na(bill_dep)) |>
   nrow()
 
 rows_removed
@@ -117,7 +117,7 @@ nrow(penguins) - rows_removed == nrow(penguins_bill)
 #| fig-width: 8
 #| fig-height: 5
 #| fig-cap: "Figure 3.2.1: Distribution of bill length across all Pygoscelis penguins. Data: Gorman et al. (2014)."
-ggplot(penguins_bill, aes(x = bill_length_mm)) +
+ggplot(penguins_bill, aes(x = bill_len)) +
   geom_histogram(binwidth = 1, fill = "steelblue", colour = "white") +
   geom_point(
     aes(y = 0),
@@ -140,11 +140,11 @@ ggplot(penguins_bill, aes(x = bill_length_mm)) +
 
 ```{r}
 #| label: verify-hist-bill-length
-# Compute min, max, and range of bill_length_mm
+# Compute min, max, and range of bill_len
 bill_range <- penguins_bill |>
   summarise(
-    min_bill = min(bill_length_mm),
-    max_bill = max(bill_length_mm),
+    min_bill = min(bill_len),
+    max_bill = max(bill_len),
     range_mm = max_bill - min_bill
   )
 
@@ -171,7 +171,7 @@ cat(
 #| fig-width: 8
 #| fig-height: 4
 #| fig-cap: "Figure 3.2.2a: Bill length histogram with binwidth = 0.5 mm (narrow). Data: Gorman et al. (2014)."
-ggplot(penguins_bill, aes(x = bill_length_mm)) +
+ggplot(penguins_bill, aes(x = bill_len)) +
   geom_histogram(binwidth = 0.5, fill = "steelblue", colour = "white") +
   labs(
     title = "Penguin Bill Length (binwidth = 0.5 mm)",
@@ -186,7 +186,7 @@ ggplot(penguins_bill, aes(x = bill_length_mm)) +
 #| fig-width: 8
 #| fig-height: 4
 #| fig-cap: "Figure 3.2.2b: Bill length histogram with binwidth = 5 mm (wide). Data: Gorman et al. (2014)."
-ggplot(penguins_bill, aes(x = bill_length_mm)) +
+ggplot(penguins_bill, aes(x = bill_len)) +
   geom_histogram(binwidth = 5, fill = "steelblue", colour = "white") +
   labs(
     title = "Penguin Bill Length (binwidth = 5 mm)",
@@ -260,7 +260,7 @@ groups rather than genuine patterns within any one species.
 #| fig-width: 8
 #| fig-height: 4
 #| fig-cap: "Figure 3.2.4: Bill length by species for Pygoscelis penguins (raw points). Data: Gorman et al. (2014)."
-ggplot(penguins_bill, aes(x = bill_length_mm, y = species)) +
+ggplot(penguins_bill, aes(x = bill_len, y = species)) +
   geom_point() +
   labs(
     title = "Bill Length by Species (Raw Points)",
@@ -299,7 +299,7 @@ ggplot(penguins_bill, aes(x = bill_length_mm, y = species)) +
 #| fig-width: 8
 #| fig-height: 4
 #| fig-cap: "Figure 3.2.5: Bill length by species with vertical jitter (geom_jitter()). Data: Gorman et al. (2014)."
-ggplot(penguins_bill, aes(x = bill_length_mm, y = species)) +
+ggplot(penguins_bill, aes(x = bill_len, y = species)) +
   geom_jitter(
     width = 0,
     height = 0.2,
@@ -349,7 +349,7 @@ ggplot(penguins_bill, aes(x = bill_length_mm, y = species)) +
 #| fig-width: 8
 #| fig-height: 4
 #| fig-cap: "Figure 3.2.6: Bill length by species using a beeswarm plot (geom_beeswarm()). Data: Gorman et al. (2014)."
-ggplot(penguins_bill, aes(x = bill_length_mm, y = species)) +
+ggplot(penguins_bill, aes(x = bill_len, y = species)) +
   geom_beeswarm(
     cex = 1.8,
     alpha = 0.6,
@@ -428,9 +428,9 @@ crowding at small figure sizes.
 #| fig-cap: "Figure 3.2.8: Bill length distribution faceted by species. Dashed vertical line marks the overall mean bill length across all species. Data: Gorman et al. (2014)."
 # Compute overall mean once — scalar, so geom_vline() places it identically
 # in every facet
-overall_mean_bill <- mean(penguins_bill$bill_length_mm)
+overall_mean_bill <- mean(penguins_bill$bill_len)
 
-ggplot(penguins_bill, aes(x = bill_length_mm)) +
+ggplot(penguins_bill, aes(x = bill_len)) +
   geom_histogram(binwidth = 1, fill = "steelblue", colour = "white") +
   geom_point(
     aes(y = 0),
@@ -491,7 +491,7 @@ ggplot(penguins_bill, aes(x = bill_length_mm)) +
 #| fig-width: 8
 #| fig-height: 5
 #| fig-cap: "Figure 3.2.9: Violin plot with embedded box plot of bill length by species. Data: Gorman et al. (2014)."
-ggplot(penguins_bill, aes(x = bill_length_mm, y = species)) +
+ggplot(penguins_bill, aes(x = bill_len, y = species)) +
   geom_violin(fill = "steelblue", alpha = 0.4, colour = "grey40") +
   geom_boxplot(width = 0.08, outlier.shape = NA, colour = "grey20") +
   labs(
@@ -553,7 +553,7 @@ switching between two separate plots.
 #| fig-width: 8
 #| fig-height: 5
 #| fig-cap: "Figure 3.3.1: Distribution of bill depth across all Pygoscelis penguins. Data: Gorman et al. (2014)."
-ggplot(penguins_bill, aes(x = bill_depth_mm)) +
+ggplot(penguins_bill, aes(x = bill_dep)) +
   geom_histogram(binwidth = 0.5, fill = "coral", colour = "white") +
   geom_point(
     aes(y = 0),
@@ -603,9 +603,9 @@ ggplot(penguins_bill, aes(x = bill_depth_mm)) +
 #| fig-width: 10
 #| fig-height: 6
 #| fig-cap: "Figure 3.3.2: Bill depth distribution faceted by species. Dashed vertical line marks the overall mean bill depth across all species. Data: Gorman et al. (2014)."
-overall_mean_depth <- mean(penguins_bill$bill_depth_mm)
+overall_mean_depth <- mean(penguins_bill$bill_dep)
 
-ggplot(penguins_bill, aes(x = bill_depth_mm)) +
+ggplot(penguins_bill, aes(x = bill_dep)) +
   geom_histogram(binwidth = 0.5, fill = "coral", colour = "white") +
   geom_point(
     aes(y = 0),
@@ -700,12 +700,12 @@ ggplot(penguins_bill, aes(x = bill_depth_mm)) +
 # Compute mean bill length and depth per species
 bill_means <- penguins_bill |>
   summarise(
-    mean_bill_length_mm = round(mean(bill_length_mm), 2),
-    mean_bill_depth_mm = round(mean(bill_depth_mm), 2),
+    mean_bill_len = round(mean(bill_len), 2),
+    mean_bill_dep = round(mean(bill_dep), 2),
     n = n(),
     .by = species
   ) |>
-  arrange(mean_bill_length_mm)
+  arrange(mean_bill_len)
 
 bill_means
 ```
@@ -715,14 +715,14 @@ bill_means
 # Check pairwise differences in mean bill length and depth
 bill_means |>
   summarise(
-    adelie_chinstrap_length_diff = mean_bill_length_mm[species == "Chinstrap"] -
-      mean_bill_length_mm[species == "Adelie"],
-    chinstrap_gentoo_length_diff = mean_bill_length_mm[species == "Gentoo"] -
-      mean_bill_length_mm[species == "Chinstrap"],
-    adelie_chinstrap_depth_diff = mean_bill_depth_mm[species == "Adelie"] -
-      mean_bill_depth_mm[species == "Chinstrap"],
-    gentoo_adelie_depth_diff = mean_bill_depth_mm[species == "Adelie"] -
-      mean_bill_depth_mm[species == "Gentoo"]
+    adelie_chinstrap_length_diff = mean_bill_len[species == "Chinstrap"] -
+      mean_bill_len[species == "Adelie"],
+    chinstrap_gentoo_length_diff = mean_bill_len[species == "Gentoo"] -
+      mean_bill_len[species == "Chinstrap"],
+    adelie_chinstrap_depth_diff = mean_bill_dep[species == "Adelie"] -
+      mean_bill_dep[species == "Chinstrap"],
+    gentoo_adelie_depth_diff = mean_bill_dep[species == "Adelie"] -
+      mean_bill_dep[species == "Gentoo"]
   )
 ```
 
@@ -757,7 +757,7 @@ bill_means |>
 #| fig-width: 8
 #| fig-height: 6
 #| fig-cap: "Figure 3.4.1: Scatter plot of bill depth vs. bill length across all Pygoscelis penguins with pooled linear trend. Data: Gorman et al. (2014)."
-ggplot(penguins_bill, aes(x = bill_length_mm, y = bill_depth_mm)) +
+ggplot(penguins_bill, aes(x = bill_len, y = bill_dep)) +
   geom_point(alpha = 0.4, size = 1.8) +
   geom_smooth(method = "lm", colour = "firebrick", se = TRUE) +
   labs(
@@ -812,9 +812,9 @@ slope that reverses or disappears once species is accounted for.
 
 ```{r}
 #| label: verify-exact-overplotting
-# Count observations at each unique (bill_length_mm, bill_depth_mm) position
+# Count observations at each unique (bill_len, bill_dep) position
 overlap_counts <- penguins_bill |>
-  count(bill_length_mm, bill_depth_mm, name = "stack_size")
+  count(bill_len, bill_dep, name = "stack_size")
 
 # Number of points hidden by exact overlap
 # For each position with n > 1, (n - 1) points are hidden behind the top point
@@ -857,7 +857,7 @@ cat("Maximum stack size at any (x, y) position:", max_stack, "\n")
 # Total rows minus distinct (x, y) positions = total hidden points
 total_rows <- nrow(penguins_bill)
 distinct_positions <- penguins_bill |>
-  distinct(bill_length_mm, bill_depth_mm) |>
+  distinct(bill_len, bill_dep) |>
   nrow()
 
 points_hidden_distinct <- total_rows - distinct_positions
@@ -877,7 +877,7 @@ cat("Points hidden by overlap:  ", points_hidden_distinct, "\n")
 #| fig-width: 8
 #| fig-height: 6
 #| fig-cap: "Figure 3.4.4a: Jittered scatter plot of bill depth vs. bill length with pooled linear trend. Data: Gorman et al. (2014)."
-ggplot(penguins_bill, aes(x = bill_length_mm, y = bill_depth_mm)) +
+ggplot(penguins_bill, aes(x = bill_len, y = bill_dep)) +
   geom_jitter(
     width = 0.15,
     height = 0.08,
@@ -917,7 +917,7 @@ ggplot(penguins_bill, aes(x = bill_length_mm, y = bill_depth_mm)) +
 #| fig-width: 8
 #| fig-height: 6
 #| fig-cap: "Figure 3.4.4b: Count-symbol plot of bill depth vs. bill length. Symbol area is proportional to the number of penguins at each coordinate. Pooled linear trend included. Data: Gorman et al. (2014)."
-ggplot(penguins_bill, aes(x = bill_length_mm, y = bill_depth_mm)) +
+ggplot(penguins_bill, aes(x = bill_len, y = bill_dep)) +
   geom_count(alpha = 0.5, colour = "steelblue") +
   scale_size_area(
     name = "Count",
@@ -976,7 +976,7 @@ of the plot are driving the slope.
 #| fig-cap: "Figure 3.4.6: Count-symbol scatter plot of bill depth vs. bill length, coloured by species with per-species linear trends. Data: Gorman et al. (2014)."
 ggplot(
   penguins_bill,
-  aes(x = bill_length_mm, y = bill_depth_mm, colour = species)
+  aes(x = bill_len, y = bill_dep, colour = species)
 ) +
   geom_count(alpha = 0.6) +
   scale_size_area(name = "Count", max_size = 10) +
@@ -1028,7 +1028,7 @@ relationships and produces a spurious negative correlation.
 ```{r}
 #| label: verify-correlation-pooled
 # Pooled correlation across all species
-pooled_cor <- cor(penguins_bill$bill_length_mm, penguins_bill$bill_depth_mm)
+pooled_cor <- cor(penguins_bill$bill_len, penguins_bill$bill_dep)
 
 cat("Pooled Pearson correlation (all species):", round(pooled_cor, 4), "\n")
 cat(
@@ -1046,9 +1046,9 @@ cat(
 # Per-species Pearson correlation
 species_cor <- penguins_bill |>
   summarise(
-    correlation = round(cor(bill_length_mm, bill_depth_mm), 4),
+    correlation = round(cor(bill_len, bill_dep), 4),
     sign = ifelse(
-      cor(bill_length_mm, bill_depth_mm) > 0,
+      cor(bill_len, bill_dep) > 0,
       "positive",
       "negative"
     ),
@@ -1130,12 +1130,12 @@ opposite to the truth.
 #| label: verify-horst-2022
 # Reproduce the key correlation figures reported in Horst et al. (2022)
 # Pooled bill length vs bill depth correlation
-pooled_r <- cor(penguins_bill$bill_length_mm, penguins_bill$bill_depth_mm)
+pooled_r <- cor(penguins_bill$bill_len, penguins_bill$bill_dep)
 
 # Per-species correlations
 species_r <- penguins_bill |>
   summarise(
-    r = round(cor(bill_length_mm, bill_depth_mm), 3),
+    r = round(cor(bill_len, bill_dep), 3),
     .by = species
   ) |>
   arrange(species)
@@ -1197,7 +1197,7 @@ any x-axis reading, which the AI flagged unprompted.
 
   Incorrect response: In Section 3.1, the AI initially
 generated the data-cleaning code using shortened column names `bill_len` and
-`bill_dep` instead of the correct `bill_length_mm` and `bill_depth_mm` used
+`bill_dep` instead of the correct `bill_len` and `bill_dep` used
 by the `palmerpenguins` package. The AI had incorrectly assumed a shortened
 naming convention from R's newer built-in `datasets` version of the penguins
 data (available from R 4.5+), which does not apply when `library(palmerpenguins)`
@@ -1206,7 +1206,7 @@ with a `Can't select columns that don't exist` error from `dplyr::select()`.
 The team corrected the problem by consulting the `palmerpenguins` package
 documentation (`?penguins`) to confirm the exact column names, then replacing
 all occurrences of `bill_len` and `bill_dep` throughout the QMD with
-`bill_length_mm` and `bill_depth_mm` respectively.
+`bill_len` and `bill_dep` respectively.
 
 # 4.2 Roles and Contributions 
 - **Adam: Coder**  
