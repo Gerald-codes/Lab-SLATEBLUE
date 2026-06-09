@@ -1,0 +1,795 @@
+---
+title: "Week 06 Lab: irline On-Time Departure Record from New York City-Area Airports"
+subtitle: "Visualizing On-Time Departures from New York City-Area Airports"
+author: "Team SLATEBLUE"
+date: "2026-06-09"
+format:
+  html:
+    toc: true
+    toc-depth: 3
+    number-sections: false
+    theme: cosmo
+    code-fold: false
+    code-tools: true
+    df-print: paged
+execute:
+  echo: true
+  warning: false
+  message: false
+---
+
+
+## Set up
+
+```{r}
+#| label: setup
+#| message: false
+library(tidyverse)
+library(nycflights13)
+library(ggrepel)
+```
+
+## 3.1 Data Preparation
+
+```{r}
+#| label: data-preparation
+# Import carriers lookup table
+carriers <- read_csv("carriers.csv")
+
+# Build departures tibble
+departures <- flights |>
+  # Drop cancelled flights (NA in dep_delay)
+  filter(!is.na(dep_delay)) |>
+  # Select and rename/create required columns
+  transmute(
+    airline_code = carrier,
+    airport_code = origin,
+    airport = case_match(
+      origin,
+      "EWR" ~ "Newark",
+      "LGA" ~ "LaGuardia",
+      "JFK" ~ "JFK"
+    ),
+    hour = hour,
+    on_time = dep_delay < 15
+  ) |>
+  # Join common airline names
+  left_join(carriers, by = "airline_code") |>
+  # Drop the code columns
+  select(airline, airport, hour, on_time)
+
+glimpse(departures)
+```
+
+### Verifier Task — Join Integrity Check
+
+```{r}
+#| label: verify-join-integrity
+# Checking dataset before Joining with csv file (after filter + transmute)
+pre_join <- flights |>
+  filter(!is.na(dep_delay)) |>
+  transmute(
+    airline_code = carrier,
+    airport_code = origin,
+    airport = case_match(
+      origin,
+      "EWR" ~ "Newark",
+      "LGA" ~ "LaGuardia",
+      "JFK" ~ "JFK"
+    ),
+    hour = hour,
+    on_time = dep_delay < 15
+  )
+
+rows_before_join <- nrow(pre_join)
+rows_after_join <- nrow(departures)
+
+cat("Rows before join:", rows_before_join, "\n")
+cat("Rows after join: ", rows_after_join, "\n")
+cat("Row count unchanged:", rows_before_join == rows_after_join, "\n\n")
+
+# Duplicate airline code check
+duplicate_codes <- carriers |>
+  count(airline_code) |>
+  filter(n > 1)
+
+cat("Duplicate codes in carriers.csv:", nrow(duplicate_codes), "\n")
+
+# Check for NA in columns
+na_counts <- departures |>
+  summarise(across(everything(), ~ sum(is.na(.))))
+
+print(na_counts)
+
+cat(
+  "\nFinal tibble is complete with no missing vals:",
+  all(na_counts == 0),
+  "\n"
+)
+
+# Print summary of checks if failed
+stopifnot(
+  "Row count changed after join" = rows_before_join == rows_after_join,
+  "Duplicate codes in carriers lookup" = nrow(duplicate_codes) == 0,
+  "Missing values present in departures" = all(na_counts == 0)
+)
+
+cat("All data checks passed.\n")
+```
+
+**What each check catches:**
+
+- Confirmed that no duplicates and missing values exist in the final `departures` tibble, ensuring data integrity after the join.
+
+
+## 3.2 Airlines Ranked by Departures
+
+### a. Dataset Summary — Departures by Airline in ascending Order of Departures
+
+```{r}
+#| label: departures-by-airline
+departures_by_airline <- departures |>
+  summarise(
+    n = n(),
+    on_time_pct = mean(on_time) * 100,
+    .by = airline
+  ) |>
+  mutate(
+    airline = fct_reorder(airline, n)
+  )
+
+glimpse(departures_by_airline)
+```
+### Sorted Table Top 5 Airlines by Departures
+```{r}
+head(departures_by_airline)
+```
+
+### Verifier Task — Count Check with No. of Rows in `departures`
+
+```{r}
+#| label: verify-departures-by-airline
+cat(
+  "Sum of counts in departures_by_airline:",
+  sum(departures_by_airline$n),
+  "\n"
+)
+cat("Rows in departures: ", nrow(departures), "\n")
+```
+
+
+### b. Lollipop Chart — Airlines Ranked by Number of Departures
+
+```{r}
+#| label: lollipop-departures
+#| fig-width: 8
+#| fig-height: 6
+#| fig-cap: "Figure 3.2: Number of departures by airline from New York City-area airports in 2013. Data: nycflights13."
+ggplot(departures_by_airline, aes(x = n, y = airline)) +
+  geom_segment(
+    aes(x = 0, xend = n, y = airline, yend = airline),
+    colour = "grey50",
+    linewidth = 0.6
+  ) +
+  geom_point(size = 3, colour = "steelblue") +
+  geom_text(
+    aes(label = scales::comma(n)),
+    hjust = -0.2,
+    nudge_x = 0,
+    size = 3.2
+  ) +
+  scale_x_continuous(
+    expand = expansion(mult = c(0, 0.15))
+  ) +
+  theme_minimal() +
+  theme(
+    axis.title.x = element_blank(),
+    axis.text.x = element_blank(),
+    axis.ticks.x = element_blank(),
+    panel.grid.major.x = element_blank(),
+    panel.grid.minor.x = element_blank()
+  ) +
+  labs(
+    title = "Airlines Ranked by Number of Departures (NYC, 2013)",
+    y = NULL
+  )
+```
+
+**c. What is the advantage of placing the airline names on the y-axis rather than the x-axis in this plot?**
+
+Airline names are long character strings that overlap heavily with one another when placed on the x-axis, forcing diagonal or rotated tick labels that are harder to read. Placing them on the y-axis allows each label to sit on its own horizontal
+line, left-aligned and fully legible without rotation.
+
+**e. Advantage and Disadvantage of a lollipop chart over a bar chart:**
+
+The thin stem of a lollipop reduces visual clutter when many categories are plotted, our eyes are guided to the endpoint on the dot rather than being drawn to a large filled rectangle, making differences between similar counts easier to perceive.
+
+A lollipop chart does not require a zero baseline as strongly as a bar chart
+does, which can encourage designers to omit it. However, unlike a bar chart with it has filled area and a truncated axis is immediately misleading. A lollipop's stem still must start at zero, otherwise the length of the stem no longer encodes the count accurately. Readers are less familiar with lollipop conventions may not notice a missing or shifted baseline.
+
+
+## 3.3 On-Time Departures by Airline
+
+### a-b. Remove <1000 Departures and Reorder Airlines by On-Time Percentage
+
+```{r}
+#| label: ontime-by-airline
+departures_by_airline <- departures_by_airline |>
+  filter(n >= 1000) |>
+  mutate(airline = fct_reorder(airline, on_time_pct))
+
+glimpse(departures_by_airline)
+```
+
+### c. Cleveland Dot Plot — Airlines Ranked by On-Time Percentage
+
+```{r}
+#| label: dotplot-ontime
+#| fig-width: 6
+#| fig-height: 5
+#| fig-cap: "Figure 3.3: On-time departure percentage by airline from New York City-area airports in 2013 (airlines with ≥ 1,000 departures only)"
+ggplot(departures_by_airline, aes(x = on_time_pct, y = airline)) +
+  geom_point(size = 3, colour = "steelblue") +
+  geom_text(
+    aes(label = sprintf("%.1f%%", on_time_pct)),
+    hjust = -0.2,
+    size = 3.2
+  ) +
+  scale_x_continuous(
+    expand = expansion(mult = c(0.05, 0.15))
+  ) +
+  labs(
+    title = "Airlines Ranked by On-Time Departure Rate (NYC, 2013)",
+    x = "On-Time Departure Rate (%)",
+    y = NULL
+  ) +
+  theme_minimal() +
+  theme(
+    panel.grid.major.y = element_line(linetype = "dotted", colour = "grey70"),
+    panel.grid.major.x = element_blank(),
+    panel.grid.minor.x = element_blank()
+  )
+```
+
+**d. Why is it acceptable for the x-axis of a Cleveland dot plot not to start at zero, whereas the x-axis of a bar chart or lollipop chart always should?**
+
+Cleveland dot plot encodes values through the position along a common scale, not through length from a baseline. Readers compare dot positions relative to one another, not relative to the origin like other charts, so a non-zero starting point does not distort the encoded quantities. The axis can legitimately begin
+near the smallest data value to spread the points apart and make small
+differences easier to perceive.
+
+
+**e. Find the busiest airline from the previous task—the top lollipop of the previous plot—in this punctuality ranking.**
+
+```{r}
+#| label: busiest-airline-check
+# Identify the busiest airline from Section 3.2
+busiest <- departures_by_airline |>
+  arrange(desc(n)) |>
+  slice(1) |>
+  pull(airline) |>
+  as.character()
+
+# Find its rank in the punctuality ranking (1 = highest on-time pct)
+punctuality_rank <- departures_by_airline |>
+  arrange(desc(on_time_pct)) |>
+  mutate(rank = row_number()) |>
+  filter(airline == busiest) |>
+  select(airline, n, on_time_pct, rank)
+
+print(punctuality_rank)
+
+# Identify the bottom-ranked airline for later reference
+bottom_airline <- departures_by_airline |>
+  arrange(on_time_pct) |>
+  slice(1) |>
+  select(airline, on_time_pct, n)
+
+cat("\nBottom-ranked airline by on-time percentage:\n")
+print(bottom_airline)
+```
+
+**Observations:**
+
+- The busiest airline by departure volume is United Airlines, with the most
+  departures shown in section 3.2 does not necessarily lead the punctuality
+  ranking, its raw on-time percentage places it in the middle of the
+  field. 
+- The airline at the very bottom of the punctuality ranking its low raw on-time rate may be a result of the airports and time slots it operates from, rather than by scheduling performance alone.
+
+
+### Verifier task — On-Time Percentage Cross-Check for Busiest Airline
+
+```{r}
+#| label: verify-ontime-busiest
+# Identify the busiest airline by total departures
+busiest_airline <- departures_by_airline |>
+  arrange(desc(n)) |>
+  slice(1) |>
+  pull(airline) |>
+  as.character()
+
+# On-time percentage from departures_by_airline (summarised tibble)
+pct_from_summary <- departures_by_airline |>
+  filter(airline == busiest_airline) |>
+  pull(on_time_pct)
+
+# On-time percentage computed directly from raw departures tibble
+pct_from_raw <- departures |>
+  filter(airline == busiest_airline) |>
+  summarise(on_time_pct = mean(on_time) * 100) |>
+  pull(on_time_pct)
+
+cat("Busiest airline:                   ", busiest_airline, "\n")
+cat("On-time % from departures_by_airline:", round(pct_from_summary, 4), "\n")
+cat("On-time % computed from departures:  ", round(pct_from_raw, 4), "\n")
+```
+
+## 3.4 Airport Mix by Airline
+
+### a. Compute Airport Mix for Each Airline with ≥ 1,000 Departures
+
+```{r}
+#| label: airport-mix
+airport_mix <- departures |>
+  # Keep only airlines with at least 1,000 departures
+  group_by(airline) |>
+  filter(n() >= 1000) |>
+  ungroup() |>
+  # Compute departure count per airline-airport combination
+  summarise(
+    n = n(),
+    .by = c(airline, airport)
+  ) |>
+  # Compute percentage of each airline's departures from each airport
+  group_by(airline) |>
+  mutate(pct = n / sum(n) * 100) |>
+  ungroup() |>
+  # Apply same factor ordering as Section 3.3 (ascending on-time pct)
+  mutate(
+    airline = factor(airline, levels = levels(departures_by_airline$airline))
+  )
+
+glimpse(airport_mix)
+```
+
+### Verifier Task — Ensure all Airport Percentages Sum to 100%
+
+```{r}
+#| label: verify-airport-pct-sums
+# Compute per-airline percentage sums
+pct_sums <- airport_mix |>
+  summarise(total_pct = sum(pct), .by = airline) |>
+  arrange(airline)
+
+print(pct_sums)
+
+# Check each airline's percentages sum to 100 within floating-point tolerance
+all_sum_to_100 <- all(
+  sapply(pct_sums$total_pct, function(x) isTRUE(all.equal(x, 100)))
+)
+
+cat("\nAll airlines sum to 100% (within tolerance):", all_sum_to_100, "\n")
+```
+
+### b-c. Labelled Stacked Bar Chart — Airport Mix by Airline
+
+```{r}
+#| label: stacked-bar-airport-mix
+#| fig-width: 8
+#| fig-height: 6
+#| fig-cap: "Figure 3.4b: Share of departures from each New York City-area airport by airline, 2013. Airlines ordered top-to-bottom by on-time departure percentage"
+ggplot(
+  airport_mix,
+  aes(x = pct, y = fct_rev(airline), fill = airport)
+) +
+  geom_col() +
+  geom_text(
+    aes(label = ifelse(pct >= 8, sprintf("%.1f%%", pct), "")),
+    position = position_stack(vjust = 0.5),
+    size = 3,
+    colour = "white",
+    fontface = "bold"
+  ) +
+  scale_fill_brewer(palette = "Set2", name = "Airport") +
+  scale_x_continuous(
+    expand = expansion(mult = c(0, 0.01)),
+    labels = scales::label_percent(scale = 1)
+  ) +
+  labs(
+    title = "Airport Mix by Airline (NYC, 2013)",
+    x = "Share of Departures (%)",
+    y = NULL
+  ) +
+  theme_minimal() +
+  theme(
+    panel.grid.major.y = element_blank(),
+    panel.grid.minor.x = element_blank()
+  )
+```
+
+**e. Based on the stacked bar chart, which airport does the busiest airline depart from most, and how lopsided is that share?**
+
+```{r}
+#| label: busiest-dominant-airport
+busiest_airport_split <- airport_mix |>
+  filter(airline == busiest_airline) |>
+  arrange(desc(pct)) |>
+  select(airline, airport, n, pct)
+
+print(busiest_airport_split)
+```
+
+Busiest Airline as found earilier: United Airlines.
+Based on the stacked bar chart and the summary table above, the busiest airline ,United Airlines, departs mostly from **Newark (EWR)** — its dominant airport — with approximately 80% or more of its departures originating there. The remaining share is split very thinly across JFK and LaGuardia, making United's exposure heavily concentrated at a single airport. 
+
+
+## 3.5 On-Time Departures by Airport
+
+### a. Compute On-Time Departure Percentage by Airport
+
+```{r}
+#| label: ontime-by-airport
+ontime_by_airport <- departures |>
+  summarise(
+    n = n(),
+    on_time_pct = mean(on_time) * 100,
+    .by = airport
+  ) |>
+  arrange(desc(on_time_pct))
+
+ontime_by_airport
+```
+
+### Verifier Task — Weighted vs. Unweighted Airport Rate Consistency
+
+```{r}
+#| label: verify-weighted-airport-rate
+# Overall on-time percentage computed directly from raw departures
+overall_pct_raw <- mean(departures$on_time) * 100
+
+# Departure-weighted mean of the three airport on-time percentages
+overall_pct_weighted <- ontime_by_airport |>
+  summarise(weighted_mean = weighted.mean(on_time_pct, w = n)) |>
+  pull(weighted_mean)
+
+# Plain unweighted average of the three airport percentages
+overall_pct_unweighted <- mean(ontime_by_airport$on_time_pct)
+
+cat(
+  "Overall on-time % from raw departures:      ",
+  round(overall_pct_raw, 4),
+  "\n"
+)
+cat(
+  "Departure-weighted mean of airport rates:   ",
+  round(overall_pct_weighted, 4),
+  "\n"
+)
+cat(
+  "Unweighted mean of airport rates:           ",
+  round(overall_pct_unweighted, 4),
+  "\n"
+)
+cat(
+  "Discrepancy (unweighted - raw):             ",
+  round(overall_pct_unweighted - overall_pct_raw, 4),
+  "percentage points\n\n"
+)
+```
+**Why the unweighted average is a mistake**
+
+- Rates must be weighted by their denominators: Each airport's on-time percentage is computed from a different number of departures. An unweighted average treats a small airport with 50,000 departures as equally influential as a large airport with 120,000 departures eventhough the larger airport contributes far more observations to the overall rate. The weighted mean corrects this by multiplying each airport's on-time percentage by its share of total departures, which scales each airport's contribution proportionally to its share of total departures.
+
+
+### b. Dominant Airport vs. On-Time Performance
+```{r}
+#| label: dominant-airport-check
+# Identify the busiest airline's dominant airport
+dominant_airport <- airport_mix |>
+  filter(airline == busiest_airline) |>
+  arrange(desc(pct)) |>
+  slice(1) |>
+  pull(airport)
+
+# On-time percentage of the dominant airport
+dominant_airport_pct <- ontime_by_airport |>
+  filter(airport == dominant_airport) |>
+  pull(on_time_pct)
+
+# Rank of the dominant airport by on-time percentage (1 = highest)
+airport_rank <- ontime_by_airport |>
+  arrange(desc(on_time_pct)) |>
+  mutate(rank = row_number()) |>
+  filter(airport == dominant_airport) |>
+  select(airport, on_time_pct, rank)
+
+cat("Busiest airline:          ", busiest_airline, "\n")
+cat("Dominant airport:         ", dominant_airport, "\n")
+cat("Dominant airport on-time %:", round(dominant_airport_pct, 2), "\n\n")
+
+cat("Airport on-time ranking:\n")
+print(
+  ontime_by_airport |> arrange(desc(on_time_pct)) |> mutate(rank = row_number())
+)
+```
+
+Dominate Airport of busiest airline: Newark (EWR)
+On-time percentage of Newark: 74.7% (lowest among the three airports)
+
+- If the dominant airport is also the lowest punctuality airport, the busiest airline faces a structural disadvantage in the raw ranking that has nothing to do with its own scheduling decisions. Because the vast majority of its departures originate from the worst performing airport, its pooled on-time rate is dragged downward by the airport's baseline performance rather than by any failure on the airline's part which is not influenced by the airline's scheduling decisions!!
+
+- This suggests the raw rank is at least partly confounded by airport mix where an airline flying 80% or more of its routes from a low-punctuality hub will naturally post a lower raw on-time rate than an otherwise equally punctual airline whose departures are concentrated at a more punctual airport.
+
+- **A fair comparison requires controlling for airport exposure:** To assess
+  whether the busiest airline is genuinely less punctual than its
+  competitors — or merely penalised by its dominant airport — its observed
+  on-time rate must be compared against the rate that would be expected
+  given the airports and hours it flies. This adjustment is the subject of
+  the remaining tasks.
+
+  ## 3.6 On-Time Departures by Time of Day and Airport
+
+### Data Preparation
+
+```{r}
+#| label: ontime-by-hour-airport
+ontime_hour_airport <- departures |>
+  summarise(
+    n = n(),
+    on_time_pct = mean(on_time) * 100,
+    .by = c(airport, hour)
+  ) |>
+  arrange(airport, hour)
+
+glimpse(ontime_hour_airport)
+```
+
+### Line-and-Point Plot — On-Time Rate by Hour and Airport
+
+```{r}
+#| label: line-ontime-hour-airport
+#| fig-width: 9
+#| fig-height: 5
+#| fig-cap: "Figure 3.6: On-time departure percentage by scheduled departure hour and airport"
+ggplot(
+  ontime_hour_airport,
+  aes(x = hour, y = on_time_pct, colour = airport, linetype = airport)
+) +
+  geom_line(linewidth = 0.8) +
+  geom_point(size = 2) +
+  scale_x_continuous(
+    breaks = seq(5, 23, by = 2),
+    labels = function(x) sprintf("%02d:00", x)
+  ) +
+  scale_y_continuous(
+    labels = scales::label_percent(scale = 1),
+    limits = c(0, 100)
+  ) +
+  scale_colour_brewer(palette = "Set2", name = "Airport") +
+  scale_linetype_manual(
+    name = "Airport",
+    values = c("JFK" = "solid", "LaGuardia" = "dashed", "Newark" = "dotdash")
+  ) +
+  labs(
+    title = "On-Time Departure Rate by Hour and Airport (NYC, 2013)",
+    x = "Scheduled Departure Hour",
+    y = "On-Time Departure Rate (%)"
+  ) +
+  theme_minimal() +
+  theme(
+    panel.grid.minor = element_blank()
+  )
+```
+
+### Verifier Task — Time-of-Day Decline with reference to Yahoo News Article
+
+The within-day decline in on-time departure rates observed in Figure 3.6 is a norm in the airline industry. Yahoo Travel (2026) quotes Anton Radchenko, CEO of AirAdvisor, who explains the mechanism directly, *"A delay on a 7 a.m. flight does not disappear and follows the aircraft and crew for the rest of the day. By the afternoon, even small disruptions can compound quickly because there is little room left in the system to absorb them."* 
+
+Andrew Schmertz, CEO of Hopscotch Air, adds that, *"one delay can cause a domino effect"* because *"planes don't make money sitting on the ground"*, and airlines therefore schedule rotations as tightly as possible, leaving minimal buffer to absorb early disruptions before they cascade into later flights.
+
+This is consistent with the pattern in Figure 3.6, where on-time rates across all three NYC airports are highest in the early morning and fall steadily into
+the evening. The decline is not a dataset artefact but it reflects real operational mechanics, including the aircraft, crews, and gates are reused across multiple rotations, so a late inbound arrival compresses the turnaround window for the next outbound departure and propagates the delay forward. An airline scheduled heavily into late-day departure slots inherits a structurally lower on-time rate for reasons unrelated to its own scheduling quality, making hour-of-day a confounding variable.
+
+source: [Yahoo Travel, 2026](https://travel.yahoo.com/flights/article/why-flights-are-more-likely-to-be-delayed-at-certain-times-of-day-195700527.html)
+
+### c. Color + Linetype
+
+Mapping `airport` to both colour and linetype is a deliberate redundancy that serves two distinct protective purposes. The linetype ensures the plot remains interpretable for readers with colour-vision deficiency, who may be unable to distinguish the three coloured lines from one another, while the solid, dashed, and
+dot-dash patterns remain separable regardless of how colour is perceived.
+
+Also, the linetype mapping preserves legibility when the figure is shown in black and white.
+
+## 3.7 Schedule Mix by Airline
+
+### Data Preparation
+
+```{r}
+#| label: schedule-mix
+schedule_mix <- departures |>
+  # Keep only airlines with at least 1,000 departures
+  group_by(airline) |>
+  filter(n() >= 1000) |>
+  ungroup() |>
+  # Count departures per airline-hour
+  summarise(n = n(), .by = c(airline, hour)) |>
+  # Add zero rows for hours with no departures (5 to 23)
+  complete(
+    airline,
+    hour = 5:23,
+    fill = list(n = 0)
+  ) |>
+  # Compute percentage of each airline's departures in each hour
+  group_by(airline) |>
+  mutate(pct = n / sum(n) * 100) |>
+  ungroup() |>
+  # Apply on-time ranking factor order from Section 3.3
+  mutate(
+    airline = factor(airline, levels = levels(departures_by_airline$airline))
+  )
+
+glimpse(schedule_mix)
+```
+
+### Heatmap — Schedule Mix by Airline and Hour
+
+```{r}
+#| label: heatmap-schedule-mix
+#| fig-width: 10
+#| fig-height: 6
+#| fig-cap: "Figure 3.7: Percentage of each airline's departures by scheduled hour, NYC 2013. Airlines ordered top-to-bottom by on-time departure percentage (highest at top). Data: nycflights13."
+ggplot(schedule_mix, aes(x = hour, y = fct_rev(airline), fill = pct)) +
+  geom_tile(colour = "white", linewidth = 0.3) +
+  scale_fill_distiller(
+    palette = "YlOrRd",
+    direction = 1,
+    name = "Share of\nDepartures (%)",
+    na.value = "grey90"
+  ) +
+  scale_x_continuous(
+    breaks = 5:23,
+    labels = function(x) sprintf("%02d:00", x),
+    expand = expansion(0)
+  ) +
+  labs(
+    title = "Schedule Mix by Airline and Hour of Day (NYC, 2013)",
+    x = "Scheduled Departure Hour",
+    y = NULL
+  ) +
+  theme_minimal() +
+  theme(
+    axis.text.x = element_text(angle = 45, hjust = 1, size = 8),
+    panel.grid = element_blank(),
+    legend.position = "right"
+  )
+```
+
+- **The busiest airline's schedule mix is broad** United Airlines shows a relatively even spread of departures across morning through midday hours with no extreme concentration in the evening slots where on-time rates collapse. Its schedule does not suggest a heavy tilt toward the worst-performing hours, meaning the time-of-day mix is likely not the primary explanation for its results raw punctuality rank. The airport mix, where its overwhelming concentration at Newark, the lowest-punctuality airport, remains a stronger candidate for explaining its position.
+
+
+## 3.8 Observed versus Expected On-Time Departure Percentage
+
+### Slot Baseline On-Time Percentage by Airport and Hour
+
+```{r}
+#| label: slots
+slots <- departures |>
+  summarise(
+    n = n(),
+    baseline_on_time_pct = mean(on_time) * 100,
+    .by = c(airport, hour)
+  )
+
+slots
+```
+
+```{r}
+#| label: airline-performance
+airline_performance <- departures |>
+  left_join(slots, by = c("airport", "hour")) |>
+  summarise(
+    n = n(),
+    on_time_pct = mean(on_time) * 100,
+    expected_on_time_pct = mean(baseline_on_time_pct),
+    .by = airline
+  ) |>
+  filter(n >= 1000) |>
+  left_join(
+    departures |>
+      count(airline, airport) |>
+      slice_max(n, n = 1, by = airline, with_ties = FALSE) |>
+      select(airline, dominant_airport = airport),
+    by = "airline"
+  )
+
+airline_performance
+```
+
+### Bubble Plot — Observed vs. Expected On-Time Percentage
+
+```{r}
+#| label: bubble-observed-expected
+#| fig-width: 9
+#| fig-height: 7
+#| fig-cap: "Figure 3.8: Observed vs. expected on-time departure percentage by airline, NYC 2013. Point area is proportional to number of departures. Airlines above the diagonal outperform their airport-hour baseline; airlines below underperform."
+ggplot(
+  airline_performance,
+  aes(
+    x = expected_on_time_pct,
+    y = on_time_pct,
+    size = n,
+    colour = dominant_airport
+  )
+) +
+  geom_abline(
+    slope = 1,
+    intercept = 0,
+    linetype = "dashed",
+    colour = "grey40",
+    linewidth = 0.7
+  ) +
+  geom_point(alpha = 0.7) +
+  scale_size_area(
+    name = "Departures",
+    max_size = 16,
+    labels = scales::comma
+  ) +
+  scale_colour_brewer(
+    palette = "Set2",
+    name = "Dominant Airport"
+  ) +
+  geom_text_repel(
+    aes(label = airline),
+    size = 3.2,
+    colour = "grey20",
+    box.padding = 0.4,
+    point.padding = 0.3,
+    max.overlaps = Inf,
+    show.legend = FALSE
+  ) +
+  scale_x_continuous(
+    labels = scales::label_percent(scale = 1),
+    limits = c(73, 83)
+  ) +
+  scale_y_continuous(
+    labels = scales::label_percent(scale = 1),
+    limits = c(65, 92)
+  ) +
+  labs(
+    title = "Observed vs. Expected On-Time Departure Rate by Airline (NYC, 2013)",
+    subtitle = "Dashed line = equality (observed = expected). Above line: outperforms baseline; below: underperforms.",
+    x = "Expected On-Time Rate (%) — based on airport-hour mix",
+    y = "Observed On-Time Rate (%)"
+  ) +
+  theme_minimal() +
+  theme(
+    panel.grid.minor = element_blank()
+  )
+```
+
+**Busiest Airline Summary**
+United Airlines, the busiest airline, is positioned near the middle of the pack in terms of observed on-time percentage but it is above the dashed equality line, indicating it outperforms its airport-hour baseline. This suggests that while United's raw on-time rate is dragged down by its heavy concentration at Newark and its broad schedule mix, it actually performs better than expected given those structural disadvantages. The adjustment for airport and hour mix reveals that United's scheduling performance is stronger than what the raw punctuality rank would suggest.
+
+**Airline at the Bottom of the Punctuality Ranking Summary**
+ExpressJet is the airline at the bottom of the punctuality ranking as shown in the on time rate at section 3.3 of 68.9% with its dominant airport being Newark (EWR) which has the lowest on-time percentage among the three airports. In Figure 3.8, ExpressJet is positioned below the dashed equality line, indicating it underperforms its airport-hour baseline, with a shortfall of approximately 6.2 percentage points
+relative to its baseline. This suggests that ExpressJet's scheduling performance is weaker than what would be expected given its structural disadvantages of being heavily concentrated at Newark and having a broad schedule mix.
+
+Top 5 Busiest Airlines by Departures include United, JetBlue, ExpressJet, Delta, and American. Of these, only United, Delta and American outperform their baselines, suggesting stronger scheduling performance than their raw on-time rates indicate.
+
+**Are the two airlines facing similar airport-hour circumstances? If so, what does their difference in observed on-time percentage suggest?**
+Yes, both United and ExpressJet share broadly similar airport-hour circumstances as both are Newark-dominant, and their expected on-time percentages, 75.9% for United and 75.1% for ExpressJet, differ by
+less than one percentage point, confirming that the structural baseline each airline inherits from its schedule is nearly identical. 
+
+Despite operating under virtually the same airport-hour conditions, however, United's observed on-time rate of 78.2% exceeds ExpressJet's 68.9%, with a difference of 9.3 percentage points. 
+
+Hence we can tell that this gap cannot be attributed to differences in airport mix or hour-of-day distribution. Instead, it reflects a genuine differencein airline-specific operational performance. ExpressJet's shortfall below its own baseline, suggests that ExpressJet faces recurring operational difficulties cause it to fall short even of the already-disadvantaged Newark baseline that both airlines share.
+
+### a. What does the raw on-time departure ranking reveal, and what does it obscure once airport-hour circumstances are considered?
+
+The raw on-time departure ranking reflects the punctuality that passengers actually experienced, showing that ExpressJet delivered the worst on-time rates and that US Airways delivered among the best. 
+
+What it obscures is whether those differences stem from each airline's own operational choices or merely from the airports and hours it happens to serve. United's ranking shows underperformance but is largely explained by Newark's structurally low baseline, while ExpressJet's last-place ranking appears circumstantial until the airport-hour baseline reveals that it underperforms even the already-disadvantaged schedule it operates. Once airport-hour circumstances are controlled for, the ranking separates into airlines that are genuinely less punctual such as like ExpressJet, which falls well below its own baseline and airlines whose raw rank is more a reflection of where they fly than how well they run their operations.
+
+### b. Reflection
+
+#### Bao Quan
+While working through the lab, I found the process of adjusting for confounding variables like airport and hour mix to be interesting for each section changing my perspective of an airline like united to be from a underperforming average airline, to a decent one but was penelized by its dominant airport. It highlighted how raw performance metrics can be misleading without context, and how important it is to consider structural factors when evaluating operational performance. The bubble plot in section 3.8 was especially effective in visually conveying the relationship between observed and expected on-time rates, making it clear which airlines were outperforming or underperforming their baselines, and what is the actual cause of the raw punctuality rank. It was a good exercise in critical thinking and data visualization to uncover insights that are not immediately apparent from the raw data alone. 
