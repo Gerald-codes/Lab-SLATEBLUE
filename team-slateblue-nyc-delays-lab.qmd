@@ -1,5 +1,5 @@
 ---
-title: "Week 06 Lab: irline On-Time Departure Record from New York City-Area Airports"
+title: "Week 06 Lab: Airline On-Time Departure Record from New York City-Area Airports"
 subtitle: "Visualizing On-Time Departures from New York City-Area Airports"
 author: "Team SLATEBLUE"
 date: "2026-06-09"
@@ -369,7 +369,7 @@ cat("\nAll airlines sum to 100% (within tolerance):", all_sum_to_100, "\n")
 #| fig-cap: "Figure 3.4b: Share of departures from each New York City-area airport by airline, 2013. Airlines ordered top-to-bottom by on-time departure percentage"
 ggplot(
   airport_mix,
-  aes(x = pct, y = fct_rev(airline), fill = airport)
+  aes(x = pct, y = airline, fill = airport)
 ) +
   geom_col() +
   geom_text(
@@ -573,6 +573,23 @@ schedule_mix <- departures |>
 glimpse(schedule_mix)
 ```
 
+### Verifier Task — Ensure all Schedule Percentages Sum to 100%
+
+```{r}
+#| label: verify-schedule-pct-sums
+schedule_pct_sums <- schedule_mix |>
+  summarise(total_pct = sum(pct), .by = airline) |>
+  arrange(airline)
+
+print(schedule_pct_sums)
+
+all_schedule_sum_to_100 <- all(
+  sapply(schedule_pct_sums$total_pct, function(x) isTRUE(all.equal(x, 100)))
+)
+
+cat("\nAll airline schedule percentages sum to 100% (within tolerance):", all_schedule_sum_to_100, "\n")
+```
+
 ### Heatmap — Schedule Mix by Airline and Hour
 
 ```{r}
@@ -580,7 +597,7 @@ glimpse(schedule_mix)
 #| fig-width: 10
 #| fig-height: 6
 #| fig-cap: "Figure 3.7: Percentage of each airline's departures by scheduled hour, NYC 2013. Airlines ordered top-to-bottom by on-time departure percentage (highest at top). Data: nycflights13."
-ggplot(schedule_mix, aes(x = hour, y = fct_rev(airline), fill = pct)) +
+ggplot(schedule_mix, aes(x = hour, y = airline, fill = pct)) +
   geom_tile(colour = "white", linewidth = 0.3) +
   scale_fill_distiller(
     palette = "YlOrRd",
@@ -709,6 +726,8 @@ ggplot(
   )
 ```
 
+## 3.9 Summary and Interpretation
+
 **Busiest Airline Summary**
 United Airlines, the busiest airline, is positioned near the middle of the pack in terms of observed on-time percentage but it is above the dashed equality line, indicating it outperforms its airport-hour baseline. This suggests that while United's raw on-time rate is dragged down by its heavy concentration at Newark and its broad schedule mix, it actually performs better than expected given those structural disadvantages. The adjustment for airport and hour mix reveals that United's scheduling performance is stronger than what the raw punctuality rank would suggest.
 
@@ -735,4 +754,17 @@ What it obscures is whether those differences stem from each airline's own opera
 ### b. Reflection
 
 #### Bao Quan
-While working through the lab, I found the process of adjusting for confounding variables like airport and hour mix to be interesting for each section changing my perspective of an airline like united to be from a underperforming average airline, to a decent one but was penelized by its dominant airport. It highlighted how raw performance metrics can be misleading without context, and how important it is to consider structural factors when evaluating operational performance. The bubble plot in section 3.8 was especially effective in visually conveying the relationship between observed and expected on-time rates, making it clear which airlines were outperforming or underperforming their baselines, and what is the actual cause of the raw punctuality rank. It was a good exercise in critical thinking and data visualization to uncover insights that are not immediately apparent from the raw data alone. 
+While working through the lab, I found the process of adjusting for confounding variables like airport and hour mix to be interesting for each section changing my perspective of an airline like united to be from a underperforming average airline, to a decent one but was penelized by its dominant airport. It highlighted how raw performance metrics can be misleading without context, and how important it is to consider structural factors when evaluating operational performance. The bubble plot in section 3.8 was especially effective in visually conveying the relationship between observed and expected on-time rates, making it clear which airlines were outperforming or underperforming their baselines, and what is the actual cause of the raw punctuality rank. It was a good exercise in critical thinking and data visualization to uncover insights that are not immediately apparent from the raw data alone.
+
+#### Gerald
+One thing that stood out to me was the Cleveland dot plot in Section 3.3. I initially thought the busiest airline would also be one of the most punctual, but the plot showed that flight volume and punctuality are not necessarily related. It also helped me understand that not all graphs need to start at zero, as removing the zero baseline made the small differences in on-time percentages much easier to compare. This changed how I think about choosing the right visualization for different types of data.
+
+#### Jia Jia
+This lab helped me understand how data visualisation can show patterns that are not obvious from looking at tables alone. At first, I thought the airlines with the highest on-time percentages were simply performing better than the others. However, after looking at the airport mix chart and the observed versus expected bubble plot, I realised that where and when an airline operates can have a big impact on its ranking. The bubble plot was the most interesting part for me because it changed my impression of United Airlines and showed that its performance was actually better than expected once airport and time factors were considered.
+thank you!
+
+#### Adam
+one thing that stood out to me was the Observed versus Expected On-Time Departure in Section 3.8. At first i thought that the raw on time percentage was enough to judge if an airline is punctual. After seeing the equality line, I realised that some airlines were performing better or worse than expected based on the airports and hours they flew. This changed how I understood the ranking as it showed that the raw percentage is useful, but it does not show the full context behind each airline’s schedule.
+
+#### Jun Kiat
+One thing that stood out to me was how the same airline could look different depending on the plot being used. At first, United looked like an average airline based on the raw on-time ranking, but the airport mix and observed versus expected bubble plot showed that it was operating heavily from Newark, which had the lowest airport-level on-time percentage. This helped me understand that raw percentages can hide important context, especially when airlines do not operate from the same airports or at the same times. The bubble plot in Section 3.8 was the most useful for me because it clearly showed the difference between actual performance and what was expected based on airport-hour conditions.
