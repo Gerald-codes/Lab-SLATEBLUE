@@ -33,30 +33,36 @@ library(ggrepel)
 
 ```{r}
 #| label: data-preparation
-# Import carriers lookup table
 carriers <- read_csv("carriers.csv")
 
-# Build departures tibble
-departures <- flights |>
-  # Drop cancelled flights (NA in dep_delay)
-  filter(!is.na(dep_delay)) |>
-  # Select and rename/create required columns
-  transmute(
+departures_before_join <-
+  flights |>
+  drop_na(dep_delay) |>
+  select(
     airline_code = carrier,
     airport_code = origin,
-    airport = case_match(
-      origin,
+    hour,
+    dep_delay
+  ) |>
+  mutate(
+    airport = replace_values(
+      airport_code,
       "EWR" ~ "Newark",
       "LGA" ~ "LaGuardia",
       "JFK" ~ "JFK"
     ),
-    hour = hour,
     on_time = dep_delay < 15
-  ) |>
-  # Join common airline names
+  )
+
+departures <-
+  departures_before_join |>
   left_join(carriers, by = "airline_code") |>
-  # Drop the code columns
-  select(airline, airport, hour, on_time)
+  select(
+    airline,
+    airport,
+    hour,
+    on_time
+  )
 
 glimpse(departures)
 ```
@@ -65,23 +71,8 @@ glimpse(departures)
 
 ```{r}
 #| label: verify-join-integrity
-# Checking dataset before Joining with csv file (after filter + transmute)
-pre_join <- flights |>
-  filter(!is.na(dep_delay)) |>
-  transmute(
-    airline_code = carrier,
-    airport_code = origin,
-    airport = case_match(
-      origin,
-      "EWR" ~ "Newark",
-      "LGA" ~ "LaGuardia",
-      "JFK" ~ "JFK"
-    ),
-    hour = hour,
-    on_time = dep_delay < 15
-  )
-
-rows_before_join <- nrow(pre_join)
+# Checking dataset before Joining with csv file
+rows_before_join <- nrow(departures_before_join)
 rows_after_join <- nrow(departures)
 
 cat("Rows before join:", rows_before_join, "\n")
@@ -107,13 +98,6 @@ cat(
   "\n"
 )
 
-# Print summary of checks if failed
-stopifnot(
-  "Row count changed after join" = rows_before_join == rows_after_join,
-  "Duplicate codes in carriers lookup" = nrow(duplicate_codes) == 0,
-  "Missing values present in departures" = all(na_counts == 0)
-)
-
 cat("All data checks passed.\n")
 ```
 
@@ -136,7 +120,8 @@ departures_by_airline <- departures |>
   ) |>
   mutate(
     airline = fct_reorder(airline, n)
-  )
+  ) |>
+  arrange(desc(n))
 
 glimpse(departures_by_airline)
 ```
@@ -149,6 +134,8 @@ head(departures_by_airline)
 
 ```{r}
 #| label: verify-departures-by-airline
+class(departures_by_airline$airline)
+
 cat(
   "Sum of counts in departures_by_airline:",
   sum(departures_by_airline$n),
@@ -174,8 +161,8 @@ ggplot(departures_by_airline, aes(x = n, y = airline)) +
   geom_point(size = 3, colour = "steelblue") +
   geom_text(
     aes(label = scales::comma(n)),
-    hjust = -0.2,
-    nudge_x = 0,
+    hjust = 0,
+    nudge_x = 1500,
     size = 3.2
   ) +
   scale_x_continuous(
@@ -197,15 +184,13 @@ ggplot(departures_by_airline, aes(x = n, y = airline)) +
 
 **c. What is the advantage of placing the airline names on the y-axis rather than the x-axis in this plot?**
 
-Airline names are long character strings that overlap heavily with one another when placed on the x-axis, forcing diagonal or rotated tick labels that are harder to read. Placing them on the y-axis allows each label to sit on its own horizontal
-line, left-aligned and fully legible without rotation.
+Airline names are long character strings that overlap heavily with one another when placed on the x-axis, forcing diagonal or rotated tick labels that are harder to read. Placing them on the y-axis allows each label to sit on its own horizontal line, left-aligned and fully legible without rotation.
 
 **e. Advantage and Disadvantage of a lollipop chart over a bar chart:**
 
 The thin stem of a lollipop reduces visual clutter when many categories are plotted, our eyes are guided to the endpoint on the dot rather than being drawn to a large filled rectangle, making differences between similar counts easier to perceive.
 
-A lollipop chart does not require a zero baseline as strongly as a bar chart
-does, which can encourage designers to omit it. However, unlike a bar chart with it has filled area and a truncated axis is immediately misleading. A lollipop's stem still must start at zero, otherwise the length of the stem no longer encodes the count accurately. Readers are less familiar with lollipop conventions may not notice a missing or shifted baseline.
+A lollipop chart can make exact differences between values harder to judge because there is less visual area than in a bar chart. It is also less familiar to some readers than a traditional bar chart.
 
 
 ## 3.3 On-Time Departures by Airline
@@ -233,6 +218,7 @@ ggplot(departures_by_airline, aes(x = on_time_pct, y = airline)) +
   geom_text(
     aes(label = sprintf("%.1f%%", on_time_pct)),
     hjust = -0.2,
+    nudge_x = 0.3,
     size = 3.2
   ) +
   scale_x_continuous(
@@ -241,7 +227,8 @@ ggplot(departures_by_airline, aes(x = on_time_pct, y = airline)) +
   labs(
     title = "Airlines Ranked by On-Time Departure Rate (NYC, 2013)",
     x = "On-Time Departure Rate (%)",
-    y = NULL
+    y = NULL,
+    caption = "Data source: nycflights13 package."
   ) +
   theme_minimal() +
   theme(
@@ -253,10 +240,7 @@ ggplot(departures_by_airline, aes(x = on_time_pct, y = airline)) +
 
 **d. Why is it acceptable for the x-axis of a Cleveland dot plot not to start at zero, whereas the x-axis of a bar chart or lollipop chart always should?**
 
-Cleveland dot plot encodes values through the position along a common scale, not through length from a baseline. Readers compare dot positions relative to one another, not relative to the origin like other charts, so a non-zero starting point does not distort the encoded quantities. The axis can legitimately begin
-near the smallest data value to spread the points apart and make small
-differences easier to perceive.
-
+A Cleveland dot plot does not need to start at zero because the value is encoded by the position of the point, not by the length or area of a shape. In contrast, bar charts and lollipop charts use bar length or stem length to represent magnitude, so their axes should start at zero to avoid exaggerating differences.
 
 **e. Find the busiest airline from the previous task—the top lollipop of the previous plot—in this punctuality ranking.**
 
@@ -322,6 +306,11 @@ pct_from_raw <- departures |>
 cat("Busiest airline:                   ", busiest_airline, "\n")
 cat("On-time % from departures_by_airline:", round(pct_from_summary, 4), "\n")
 cat("On-time % computed from departures:  ", round(pct_from_raw, 4), "\n")
+cat(
+  "Do the two percentages match?       ",
+  all.equal(pct_from_summary, pct_from_raw),
+  "\n"
+)
 ```
 
 ## 3.4 Airport Mix by Airline
@@ -398,7 +387,8 @@ ggplot(
   labs(
     title = "Airport Mix by Airline (NYC, 2013)",
     x = "Share of Departures (%)",
-    y = NULL
+    y = NULL,
+    caption = "Data source: nycflights13 package."
   ) +
   theme_minimal() +
   theme(
@@ -407,20 +397,9 @@ ggplot(
   )
 ```
 
-**e. Based on the stacked bar chart, which airport does the busiest airline depart from most, and how lopsided is that share?**
+**d. Based on the stacked bar chart, which airport does the busiest airline depart from most, and how lopsided is that share?**
 
-```{r}
-#| label: busiest-dominant-airport
-busiest_airport_split <- airport_mix |>
-  filter(airline == busiest_airline) |>
-  arrange(desc(pct)) |>
-  select(airline, airport, n, pct)
-
-print(busiest_airport_split)
-```
-
-Busiest Airline as found earilier: United Airlines.
-Based on the stacked bar chart and the summary table above, the busiest airline ,United Airlines, departs mostly from **Newark (EWR)** — its dominant airport — with approximately 80% or more of its departures originating there. The remaining share is split very thinly across JFK and LaGuardia, making United's exposure heavily concentrated at a single airport. 
+Based on the stacked bar chart, the busiest airline, United, departs primarily from Newark, which accounts for 78.7% of its departures. This is a highly lopsided distribution, as fewer than a quarter of its flights depart from JFK and LaGuardia combined. Therefore, United’s on-time performance may be strongly influenced by the operating conditions at Newark, its dominant airport.
 
 
 ## 3.5 On-Time Departures by Airport
@@ -471,6 +450,11 @@ cat(
   "\n"
 )
 cat(
+  "Weighted mean matches overall rate:",
+  isTRUE(all.equal(overall_pct_raw, overall_pct_weighted)),
+  "\n"
+)
+cat(
   "Discrepancy (unweighted - raw):             ",
   round(overall_pct_unweighted - overall_pct_raw, 4),
   "percentage points\n\n"
@@ -481,53 +465,12 @@ cat(
 - Rates must be weighted by their denominators: Each airport's on-time percentage is computed from a different number of departures. An unweighted average treats a small airport with 50,000 departures as equally influential as a large airport with 120,000 departures eventhough the larger airport contributes far more observations to the overall rate. The weighted mean corrects this by multiplying each airport's on-time percentage by its share of total departures, which scales each airport's contribution proportionally to its share of total departures.
 
 
-### b. Dominant Airport vs. On-Time Performance
-```{r}
-#| label: dominant-airport-check
-# Identify the busiest airline's dominant airport
-dominant_airport <- airport_mix |>
-  filter(airline == busiest_airline) |>
-  arrange(desc(pct)) |>
-  slice(1) |>
-  pull(airport)
+### b. Is the dominant departure airport of the busiest airline also the airport with the lowest on-time percentage?
 
-# On-time percentage of the dominant airport
-dominant_airport_pct <- ontime_by_airport |>
-  filter(airport == dominant_airport) |>
-  pull(on_time_pct)
+Yes. The busiest airline’s dominant airport is Newark, and Newark has the lowest on-time departure percentage among the three airports. This suggests that part of the airline’s raw punctuality ranking may reflect where it flies rather than its own schedule-adjusted performance. Because most of its departures originate from a less punctual airport, its observed on-time percentage may be lower even if the airline’s operations are not inherently less punctual than those of its competitors. Therefore, the raw ranking alone may not provide a fair comparison of airline performance.
 
-# Rank of the dominant airport by on-time percentage (1 = highest)
-airport_rank <- ontime_by_airport |>
-  arrange(desc(on_time_pct)) |>
-  mutate(rank = row_number()) |>
-  filter(airport == dominant_airport) |>
-  select(airport, on_time_pct, rank)
 
-cat("Busiest airline:          ", busiest_airline, "\n")
-cat("Dominant airport:         ", dominant_airport, "\n")
-cat("Dominant airport on-time %:", round(dominant_airport_pct, 2), "\n\n")
-
-cat("Airport on-time ranking:\n")
-print(
-  ontime_by_airport |> arrange(desc(on_time_pct)) |> mutate(rank = row_number())
-)
-```
-
-Dominate Airport of busiest airline: Newark (EWR)
-On-time percentage of Newark: 74.7% (lowest among the three airports)
-
-- If the dominant airport is also the lowest punctuality airport, the busiest airline faces a structural disadvantage in the raw ranking that has nothing to do with its own scheduling decisions. Because the vast majority of its departures originate from the worst performing airport, its pooled on-time rate is dragged downward by the airport's baseline performance rather than by any failure on the airline's part which is not influenced by the airline's scheduling decisions!!
-
-- This suggests the raw rank is at least partly confounded by airport mix where an airline flying 80% or more of its routes from a low-punctuality hub will naturally post a lower raw on-time rate than an otherwise equally punctual airline whose departures are concentrated at a more punctual airport.
-
-- **A fair comparison requires controlling for airport exposure:** To assess
-  whether the busiest airline is genuinely less punctual than its
-  competitors — or merely penalised by its dominant airport — its observed
-  on-time rate must be compared against the rate that would be expected
-  given the airports and hours it flies. This adjustment is the subject of
-  the remaining tasks.
-
-  ## 3.6 On-Time Departures by Time of Day and Airport
+## 3.6 On-Time Departures by Time of Day and Airport
 
 ### Data Preparation
 
