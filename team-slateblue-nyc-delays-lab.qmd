@@ -127,7 +127,7 @@ glimpse(departures_by_airline)
 ```
 ### Sorted Table Top 5 Airlines by Departures
 ```{r}
-head(departures_by_airline)
+slice_head(departures_by_airline, n = 5)
 ```
 
 ### Verifier Task — Count Check with No. of Rows in `departures`
@@ -142,6 +142,8 @@ cat(
   "\n"
 )
 cat("Rows in departures: ", nrow(departures), "\n")
+
+sum(departures_by_airline$n) == nrow(departures)
 ```
 
 
@@ -462,7 +464,7 @@ cat(
 ```
 **Why the unweighted average is a mistake**
 
-- Rates must be weighted by their denominators: Each airport's on-time percentage is computed from a different number of departures. An unweighted average treats a small airport with 50,000 departures as equally influential as a large airport with 120,000 departures eventhough the larger airport contributes far more observations to the overall rate. The weighted mean corrects this by multiplying each airport's on-time percentage by its share of total departures, which scales each airport's contribution proportionally to its share of total departures.
+- An unweighted average treats all three airports as equally important regardless of how many departures they handle. The weighted mean accounts for the number of departures at each airport, making it representative of the overall on-time rate across all flights.
 
 
 ### b. Is the dominant departure airport of the busiest airline also the airport with the lowest on-time percentage?
@@ -587,7 +589,11 @@ all_schedule_sum_to_100 <- all(
   sapply(schedule_pct_sums$total_pct, function(x) isTRUE(all.equal(x, 100)))
 )
 
-cat("\nAll airline schedule percentages sum to 100% (within tolerance):", all_schedule_sum_to_100, "\n")
+cat(
+  "\nAll airline schedule percentages sum to 100% (within tolerance):",
+  all_schedule_sum_to_100,
+  "\n"
+)
 ```
 
 ### Heatmap — Schedule Mix by Airline and Hour
@@ -623,7 +629,7 @@ ggplot(schedule_mix, aes(x = hour, y = airline, fill = pct)) +
   )
 ```
 
-- **The busiest airline's schedule mix is broad** United Airlines shows a relatively even spread of departures across morning through midday hours with no extreme concentration in the evening slots where on-time rates collapse. Its schedule does not suggest a heavy tilt toward the worst-performing hours, meaning the time-of-day mix is likely not the primary explanation for its results raw punctuality rank. The airport mix, where its overwhelming concentration at Newark, the lowest-punctuality airport, remains a stronger candidate for explaining its position.
+- **The busiest airline's schedule mix is broad** United Airlines shows a relatively even spread of departures across morning through midday hours with no extreme concentration in the evening slots where on-time performance tends to decline. Its schedule does not suggest a heavy tilt toward the worst-performing hours, meaning the time-of-day mix is likely not the primary explanation for its results raw punctuality rank. The airport mix, where its overwhelming concentration at Newark, the lowest-punctuality airport, remains a stronger candidate for explaining its position.
 
 
 ## 3.8 Observed versus Expected On-Time Departure Percentage
@@ -729,13 +735,12 @@ ggplot(
 ## 3.9 Summary and Interpretation
 
 **Busiest Airline Summary**
-United Airlines, the busiest airline, is positioned near the middle of the pack in terms of observed on-time percentage but it is above the dashed equality line, indicating it outperforms its airport-hour baseline. This suggests that while United's raw on-time rate is dragged down by its heavy concentration at Newark and its broad schedule mix, it actually performs better than expected given those structural disadvantages. The adjustment for airport and hour mix reveals that United's scheduling performance is stronger than what the raw punctuality rank would suggest.
+United Airlines, the busiest airline, is positioned near the middle of the raw on-time ranking but lies above the dashed equality line in Figure 3.8, indicating that it outperforms its airport-hour baseline. This suggests that its relatively modest raw on-time percentage is influenced by its heavy concentration at Newark and the times at which it operates. After accounting for these structural factors, United performs better than expected, showing that the raw punctuality ranking understates its performance.
 
 **Airline at the Bottom of the Punctuality Ranking Summary**
-ExpressJet is the airline at the bottom of the punctuality ranking as shown in the on time rate at section 3.3 of 68.9% with its dominant airport being Newark (EWR) which has the lowest on-time percentage among the three airports. In Figure 3.8, ExpressJet is positioned below the dashed equality line, indicating it underperforms its airport-hour baseline, with a shortfall of approximately 6.2 percentage points
-relative to its baseline. This suggests that ExpressJet's scheduling performance is weaker than what would be expected given its structural disadvantages of being heavily concentrated at Newark and having a broad schedule mix.
+ExpressJet was the lowest-ranked airline in the raw punctuality ranking, with an on-time percentage of 68.9%. Like United, most of its departures came from Newark, which had the lowest airport-level on-time percentage among the three airports. However, ExpressJet still performed below its airport-hour baseline, suggesting that its low punctuality cannot be explained by airport and schedule mix alone. This indicates that other operational factors may also have contributed to its poorer performance.
 
-Top 5 Busiest Airlines by Departures include United, JetBlue, ExpressJet, Delta, and American. Of these, only United, Delta and American outperform their baselines, suggesting stronger scheduling performance than their raw on-time rates indicate.
+The five busiest airlines were United, JetBlue, ExpressJet, Delta and American. Among them, United, Delta and American performed better than expected based on their airport-hour mix, while JetBlue and ExpressJet performed worse than expected. This shows that airlines operating under similar conditions can still achieve very different levels of punctuality.
 
 **Are the two airlines facing similar airport-hour circumstances? If so, what does their difference in observed on-time percentage suggest?**
 Yes, both United and ExpressJet share broadly similar airport-hour circumstances as both are Newark-dominant, and their expected on-time percentages, 75.9% for United and 75.1% for ExpressJet, differ by
@@ -743,13 +748,13 @@ less than one percentage point, confirming that the structural baseline each air
 
 Despite operating under virtually the same airport-hour conditions, however, United's observed on-time rate of 78.2% exceeds ExpressJet's 68.9%, with a difference of 9.3 percentage points. 
 
-Hence we can tell that this gap cannot be attributed to differences in airport mix or hour-of-day distribution. Instead, it reflects a genuine differencein airline-specific operational performance. ExpressJet's shortfall below its own baseline, suggests that ExpressJet faces recurring operational difficulties cause it to fall short even of the already-disadvantaged Newark baseline that both airlines share.
+This gap is unlikely to be explained by differences in airport mix or hour-of-day distribution alone, as both airlines operate under very similar airport-hour conditions. The difference suggests that airline-specific factors may contribute to the variation in punctuality. ExpressJet’s observed on-time rate remains below its expected baseline, while United exceeds its baseline, indicating that the two airlines perform differently despite facing similar operating environments.
 
 ### a. What does the raw on-time departure ranking reveal, and what does it obscure once airport-hour circumstances are considered?
 
-The raw on-time departure ranking reflects the punctuality that passengers actually experienced, showing that ExpressJet delivered the worst on-time rates and that US Airways delivered among the best. 
+The raw on-time departure ranking reflects the punctuality that passengers actually experienced, showing which airlines had higher or lower observed on-time rates. For example, ExpressJet had one of the lowest observed on-time percentages, while airlines such as US Airways ranked near the top.
 
-What it obscures is whether those differences stem from each airline's own operational choices or merely from the airports and hours it happens to serve. United's ranking shows underperformance but is largely explained by Newark's structurally low baseline, while ExpressJet's last-place ranking appears circumstantial until the airport-hour baseline reveals that it underperforms even the already-disadvantaged schedule it operates. Once airport-hour circumstances are controlled for, the ranking separates into airlines that are genuinely less punctual such as like ExpressJet, which falls well below its own baseline and airlines whose raw rank is more a reflection of where they fly than how well they run their operations.
+However, the raw ranking does not account for differences in airport and departure-hour exposure. Airlines that operate heavily from lower-punctuality airports or during less punctual times of the day may appear worse than they actually are. After accounting for airport-hour circumstances, United performs better than its raw ranking suggests because it exceeds its expected baseline, while ExpressJet remains below its expected baseline. This shows that part of the raw ranking reflects where and when airlines operate, while another part reflects differences in airline-specific performance.
 
 ### b. Reflection
 
@@ -768,3 +773,26 @@ one thing that stood out to me was the Observed versus Expected On-Time Departur
 
 #### Jun Kiat
 One thing that stood out to me was how the same airline could look different depending on the plot being used. At first, United looked like an average airline based on the raw on-time ranking, but the airport mix and observed versus expected bubble plot showed that it was operating heavily from Newark, which had the lowest airport-level on-time percentage. This helped me understand that raw percentages can hide important context, especially when airlines do not operate from the same airports or at the same times. The bubble plot in Section 3.8 was the most useful for me because it clearly showed the difference between actual performance and what was expected based on airport-hour conditions.
+
+# 4.1 Reflect on AI Use
+
+Our team used ChatGPT as the chosen chat-based AI tool for this lab. One useful AI suggestion was helping us structure the data transformation and verification steps, such as creating the `departures` tibble, checking join integrity, and validating that percentage calculations summed correctly. The AI also assisted with constructing several visualisations, including the lollipop chart, Cleveland dot plot, heatmap, and observed-versus-expected bubble plot.
+
+One AI response that required checking was the ordering of airlines in some of the plots. The team verified the lab requirements and confirmed that airlines needed to follow the specified ranking order, such as ordering by on-time percentage in Sections 3.3–3.8. We adjusted the factor levels and checked the resulting plots to ensure they matched the intended rankings.
+
+# 4.2 Roles and Contributions
+
+- Adam: Coder  
+  Adam typed and edited the canonical QMD file, implemented the data preparation and visualization code, ensured all code chunks rendered correctly, and generated the final HTML submission.
+
+- Bao Quan: AI Liaison  
+  Bao Quan interacted with ChatGPT throughout the lab, maintained the AI interaction log, reviewed AI-generated suggestions, and checked that any AI-assisted code or explanations were consistent with the lab requirements.
+
+- Jia Jia: Navigator  
+  Jia Jia monitored the task requirements, coordinated the team's workflow, ensured that all sections of the lab were completed, and helped guide the interpretation of the visualizations.
+
+- Jun Kiat: Constructive Critic and Reporter  
+  Jun Kiat reviewed the team's written explanations, verifier notes, and visualizations for clarity and consistency. Jun Kiat also prepared the written interpretations and communicated the team's findings during discussions and checkpoints.
+
+- Gerald: Verifier  
+  Gerald completed the verifier tasks throughout the lab, including checking join integrity, validating airport and schedule percentages, verifying weighted and unweighted averages, and confirming consistency between summary statistics and values calculated directly from the departures dataset.
