@@ -1,0 +1,660 @@
+---
+title: "Week 08 Lab: Preston Curve"
+subtitle: "Preston Curve"
+author: "Team SLATEBLUE"
+date: "2026-06-23"
+format:
+  html:
+    toc: true
+    toc-depth: 3
+    number-sections: false
+    theme: cosmo
+    code-fold: false
+    code-tools: true
+    df-print: paged
+execute:
+  echo: true
+  warning: false
+  message: false
+---
+
+```{r}
+#| label: setup
+#| message: false
+library(tidyverse)
+library(readxl)
+library(ggrepel)
+library(scales)
+```
+
+3.1 Importing Indicator Data
+```{r}
+#| label: import-data
+gdp_data <- read_excel(
+  "API_NY.GDP.PCAP.PP.KD_DS2_en_excel_v2_417139.xls",
+  sheet = "Data",
+  skip = 3
+)
+
+le_data <- read_excel(
+  "API_SP.DYN.LE00.IN_DS2_en_excel_v2_404463.xls",
+  sheet = "Data",
+  skip = 3
+)
+
+p_data <- read_excel(
+  "API_SP.POP.TOTL_DS2_en_excel_v2_417154.xls",
+  sheet = "Data",
+  skip = 3
+)
+```
+
+
+
+Verifier Task - Ensure the 3 columns stated are present and none of the 2024 columns are empty
+```{r}
+
+required_cols <- c("Country Name", "Country Code", "2024")
+
+required_cols %in% names(gdp_data)
+required_cols %in% names(le_data)
+required_cols %in% names(p_data)
+
+checks <- tibble(
+  tibble_name = c("gdp_data", "le_data", "p_data"),
+  has_required_cols = c(
+    all(required_cols %in% names(gdp_data)),
+    all(required_cols %in% names(le_data)),
+    all(required_cols %in% names(p_data))
+  ),
+  rows = c(
+    nrow(gdp_data),
+    nrow(le_data),
+    nrow(p_data)
+  ),
+  missing_2024 = c(
+    sum(is.na(gdp_data$`2024`)),
+    sum(is.na(le_data$`2024`)),
+    sum(is.na(p_data$`2024`))
+  )
+)
+
+checks
+```
+
+3.2 Selecting Relevant Columns
+
+```{r}
+gdp_data <- gdp_data %>%
+  select(`Country Name`, `Country Code`, `2024`)
+
+le_data <- le_data %>%
+  select(`Country Name`, `Country Code`, `2024`)
+
+p_data <- p_data %>%
+  select(`Country Name`, `Country Code`, `2024`)
+```
+
+```{r}
+gdp_data <- gdp_data %>%
+  select(
+    name = `Country Name`,
+    code = `Country Code`,
+    gdp_per_cap = `2024`
+  )
+
+le_data <- le_data %>%
+  select(
+    name = `Country Name`,
+    code = `Country Code`,
+    life_exp = `2024`
+  )
+
+p_data <- p_data %>%
+  select(
+    name = `Country Name`,
+    code = `Country Code`,
+    pop = `2024`
+  )
+```
+
+3.3 Merge Indicator Data
+```{r}
+countries <- gdp_data %>%
+  left_join(le_data, by = c("name", "code")) %>%
+  left_join(p_data, by = c("name", "code"))
+
+glimpse(countries)
+```
+
+```{r}
+names(countries)
+```
+
+3.4 Import World Bank Region Data
+```{r}
+metadata <- read_excel(
+  "API_NY.GDP.PCAP.PP.KD_DS2_en_excel_v2_417139.xls",
+  sheet = "Metadata - Countries"
+) %>%
+  select(
+    code = `Country Code`,
+    region = Region
+  )
+
+glimpse(metadata)
+```
+
+Verifier Task - Confirm country code present in metadata are in countries.
+
+```{r}
+all(metadata$code %in% countries$code)
+```
+
+```{r}
+all(countries$code %in% metadata$code)
+```
+
+```{r}
+countries_in_metadata <-
+  nrow(countries %>% anti_join(metadata, by = "code")) == 0
+
+metadata_in_countries <-
+  nrow(metadata %>% anti_join(countries, by = "code")) == 0
+
+countries_in_metadata
+metadata_in_countries
+```
+
+3.5 Merge Region data with the Indicators
+```{r}
+countries <- countries %>%
+  left_join(metadata, by = "code")
+```
+
+```{r}
+nrow(countries)
+```
+
+```{r}
+names(countries)
+```
+
+Verifier Task - Confirm the number of rows before and after
+```{r}
+countries_rows <- nrow(countries)
+
+nrow(countries) == countries_rows
+```
+
+```{r}
+names(countries)
+```
+
+3.6 Missing Missing Data
+```{r}
+countries <- countries %>%
+  drop_na()
+
+sum(is.na(countries))
+```
+
+3.7 Prepare Country Labels based on GDP and life expectancy
+```{r}
+# Get the country codes to label
+label_codes <- countries %>%
+  filter(
+    gdp_per_cap >= nth(sort(gdp_per_cap, decreasing = TRUE), 10) |
+      gdp_per_cap <= nth(sort(gdp_per_cap), 10) |
+      life_exp >= nth(sort(life_exp, decreasing = TRUE), 10) |
+      life_exp <= nth(sort(life_exp), 10) |
+      pop >= nth(sort(pop, decreasing = TRUE), 10)
+  ) %>%
+  pull(code)
+
+# Create the label column
+countries <- countries %>%
+  mutate(
+    label = if_else(code %in% label_codes, code, "")
+  )
+```
+
+```{r}
+countries %>%
+  filter(label != "") %>%
+  select(name, code, label)
+```
+
+Verifier Task - Confirm countries have the following labels
+
+```{r}
+names(countries)
+```
+```{r}
+expected_cols <- c(
+  "name",
+  "code",
+  "gdp_per_cap",
+  "life_exp",
+  "pop",
+  "region",
+  "label"
+)
+
+list(
+  correct_columns = setequal(names(countries), expected_cols),
+  no_missing_values = sum(is.na(countries)) == 0
+)
+```
+
+
+4 Visualizing the Data
+
+4.1 Scale Audit
+
+
+4.2 Set up Basic Plot
+```{r}
+ggplot(
+  countries,
+  aes(
+    x = gdp_per_cap,
+    y = life_exp,
+    size = pop,
+    colour = region
+  )
+) +
+  geom_point(alpha = 0.6)
+```
+
+
+4.3 Add Country Labels
+```{r}
+ggplot(
+  countries,
+  aes(
+    x = gdp_per_cap,
+    y = life_exp,
+    size = pop,
+    colour = region
+  )
+) +
+  geom_point(alpha = 0.6) +
+  geom_text_repel(
+    aes(label = label),
+    show.legend = FALSE
+  )
+```
+
+4.4 Add Trend Curves
+```{r}
+ggplot(
+  countries,
+  aes(
+    x = gdp_per_cap,
+    y = life_exp
+  )
+) +
+  geom_point(
+    aes(
+      size = pop,
+      colour = region
+    ),
+    alpha = 0.6
+  ) +
+  geom_smooth(
+    aes(weight = pop),
+    method = "loess",
+    colour = "grey40",
+    se = FALSE
+  ) +
+  geom_text_repel(
+    aes(label = label),
+    show.legend = FALSE
+  )
+```
+
+Verifier Task - Add second unweighted plot in contrasting color
+```{r}
+ggplot(
+  countries,
+  aes(
+    x = gdp_per_cap,
+    y = life_exp
+  )
+) +
+  geom_point(
+    aes(
+      size = pop,
+      colour = region
+    ),
+    alpha = 0.6
+  ) +
+  geom_smooth(
+    method = "loess",
+    colour = "red",
+    se = FALSE
+  ) +
+  geom_smooth(
+    aes(weight = pop),
+    method = "loess",
+    colour = "grey40",
+    se = FALSE
+  ) +
+  geom_text_repel(
+    aes(label = label),
+    show.legend = FALSE
+  )
+```
+
+4.5 Add Annotations
+```{r}
+ggplot(
+  countries,
+  aes(
+    x = gdp_per_cap,
+    y = life_exp
+  )
+) +
+  geom_point(
+    aes(
+      size = pop,
+      colour = region
+    ),
+    alpha = 0.6
+  ) +
+  geom_smooth(
+    aes(weight = pop),
+    method = "loess",
+    colour = "grey40",
+    se = FALSE
+  ) +
+  geom_text_repel(
+    aes(label = label),
+    show.legend = FALSE
+  ) +
+  labs(
+    title = "Life Expectancy vs GDP per Capita by Country (2024)",
+    x = "GDP per Capita (PPP, constant international $)",
+    y = "Life Expectancy (years)",
+    colour = "Region",
+    size = "Population",
+    caption = "Source: World Bank (2024)"
+  )
+```
+
+4.6 Add x-Axis Scale
+```{r}
+ggplot(countries, aes(x = gdp_per_cap, y = life_exp)) +
+  geom_point(aes(size = pop, colour = region), alpha = 0.6) +
+  geom_smooth(
+    aes(weight = pop),
+    method = "loess",
+    colour = "grey40",
+    se = FALSE
+  ) +
+  geom_smooth(method = "loess", colour = "red", se = FALSE) +
+  geom_text_repel(aes(label = label), show.legend = FALSE) +
+  scale_x_log10(
+    breaks = breaks_log(n = 8),
+    labels = label_comma()
+  ) +
+  labs(
+    title = "Life Expectancy vs GDP per Capita by Country (2024)",
+    subtitle = "GDP per capita is shown on a base-10 logarithmic scale",
+    x = "GDP per Capita (log scale)",
+    y = "Life Expectancy (years)",
+    colour = "Region",
+    size = "Population",
+    caption = "Source: World Bank (2024)"
+  )
+```
+
+4.7 Reason choice of Log Axis Ticks
+```{r}
+# Create a colour for each region
+region_colours <- scales::hue_pal()(length(unique(countries$region)))
+names(region_colours) <- unique(countries$region)
+
+plot(
+  x = countries$gdp_per_cap,
+  y = countries$life_exp,
+  log = "x",
+  pch = 16,
+  cex = scales::rescale(sqrt(countries$pop), to = c(0.5, 4)),
+  col = scales::alpha(region_colours[countries$region], 0.6),
+  xlab = "GDP per Capita (PPP, log scale)",
+  ylab = "Life Expectancy (years)",
+  main = "Gapminder-style Bubble Chart (2024)"
+)
+
+text(
+  x = countries$gdp_per_cap,
+  y = countries$life_exp,
+  labels = countries$label,
+  pos = 4,
+  cex = 0.7
+)
+
+legend(
+  "bottomright",
+  legend = names(region_colours),
+  col = region_colours,
+  pch = 16,
+  bty = "n"
+)
+```
+- One other advantage of ggplot2 approach: It shows equal ratios for the same equal visual distances, such as from 1000 to 3000, and for 10,000 to 30,000. GDP per capita typically varies by orders of magnitude across countries, hence ratio comparisons will be more meaningful than absolute differences.
+- For a gapminder chart, Gapminder's doubling scheme places each tick at twice the previous value, such as from 1000 to 2000 and for 10,000 to 20,000, so equal distances along the axis represent the same multiplicative factor, making it easy to see how many times richer one country is than another.
+
+4.8 Change Size Scale
+```{r}
+ggplot(countries, aes(x = gdp_per_cap, y = life_exp)) +
+  geom_point(
+    aes(size = pop, colour = region),
+    alpha = 0.6
+  ) +
+  geom_smooth(
+    aes(weight = pop),
+    method = "loess",
+    colour = "grey40",
+    se = FALSE
+  ) +
+  geom_text_repel(
+    aes(label = label),
+    show.legend = FALSE
+  ) +
+  scale_x_log10(
+    breaks = breaks_log(n = 8),
+    labels = label_comma()
+  ) +
+  scale_size_area(
+    max_size = 20,
+    name = "Population"
+  ) +
+  scale_size_area(
+    breaks = c(1e6, 1e7, 1e8, 1e9),
+    labels = label_number(scale_cut = cut_short_scale()),
+    max_size = 18,
+    name = "Population"
+  ) +
+  labs(
+    title = "Life Expectancy vs GDP per Capita by Country (2024)",
+    x = "GDP per Capita (PPP, constant international $)",
+    y = "Life Expectancy (years)",
+    colour = "Region",
+    caption = "Source: World Bank (2024)"
+  )
+```
+Verifier Task - Confirm physical measurements of legend
+142/42 = 3.38 (using built-in screenshot tool for quick pixel counts to compare)
+
+4.9 Change Color Scheme
+```{r}
+ggplot(countries, aes(x = gdp_per_cap, y = life_exp)) +
+  geom_point(
+    aes(size = pop, colour = region),
+    alpha = 0.6
+  ) +
+  geom_smooth(
+    aes(weight = pop),
+    method = "loess",
+    colour = "grey40",
+    se = FALSE
+  ) +
+  geom_text_repel(
+    aes(label = label),
+    show.legend = FALSE
+  ) +
+  scale_x_log10(
+    breaks = breaks_log(n = 8),
+    labels = label_comma()
+  ) +
+  scale_size_area(
+    breaks = c(1e6, 1e7, 1e8, 1e9),
+    labels = label_number(scale_cut = cut_short_scale()),
+    max_size = 18,
+    name = "Population"
+  ) +
+  scale_colour_brewer(
+    palette = "Dark2",
+    name = "Region"
+  ) +
+  labs(
+    title = "Life Expectancy vs GDP per Capita by Country (2024)",
+    subtitle = "Bubble area is proportional to population",
+    x = "GDP per Capita (PPP, log scale)",
+    y = "Life Expectancy (years)",
+    caption = "Source: World Bank (2024)"
+  )
+```
+
+Verifier Task - Confirm color legend matches no. of distinct regions
+```{r}
+countries %>%
+  summarise(n_regions = n_distinct(region))
+```
+
+4.10 Refining Guides
+```{r}
+ggplot(countries, aes(x = gdp_per_cap, y = life_exp)) +
+  geom_point(
+    aes(size = pop, colour = region),
+    alpha = 0.6
+  ) +
+  geom_smooth(
+    aes(weight = pop),
+    method = "loess",
+    colour = "grey40",
+    se = FALSE
+  ) +
+  geom_text_repel(
+    aes(label = label),
+    show.legend = FALSE
+  ) +
+  scale_x_log10(
+    breaks = breaks_log(n = 8),
+    labels = label_comma()
+  ) +
+  scale_size_area(
+    breaks = c(1e6, 1e7, 1e8, 1e9),
+    labels = label_number(scale_cut = cut_short_scale()),
+    max_size = 18,
+    name = "Population"
+  ) +
+  scale_colour_brewer(
+    palette = "Dark2",
+    name = "Region"
+  ) +
+  labs(
+    title = "Life Expectancy vs GDP per Capita by Country (2024)",
+    subtitle = "Bubble area is proportional to population",
+    x = "GDP per Capita (PPP, log scale)",
+    y = "Life Expectancy (years)",
+    caption = "Source: World Bank (2024)"
+  ) +
+  guides(
+    color = guide_legend(
+      order = 1,
+      override.aes = list(alpha = 1, size = 4)
+    ),
+    size = guide_legend(
+      order = 2,
+      reverse = TRUE
+    )
+  )
+```
+
+a. In your opinion, should the color or size legend appear at the top? Why?
+No, if the legend is on top/below of the graph, it will be hard for the user to reference the legend visually as they will have to scroll up/down to reference the legend especially if the graphs is bigger.
+
+b. Does reversing the size legend make the population mapping easier to read? Why?
+Yes, showing the larger area bubble on the legend showing larger population will help as they are more visually dominant and reduces the cognitive load as there will not be a need for mental reversal to match the bubble on plot to the legend from small to large.
+
+c. Why should the color legend use opaque symbols (alpha = 1) although the plotted points are semi-transparent?
+To allow the readers to easily identify which color maps to which region quickly, as the semi-transparent serves a different purpose when used to describe the data on the plot.
+
+
+4.11 Compare Axis Guides
+As an experiment with axis guide positioning, create a temporary version of your plot with the x-axis guide moved to the top (using the guide_axis() function). You may wish to consult Section 12.1 in the textbook.
+
+```{r}
+ggplot(countries, aes(x = gdp_per_cap, y = life_exp)) +
+  geom_point(
+    aes(size = pop, colour = region),
+    alpha = 0.6
+  ) +
+  geom_smooth(
+    aes(weight = pop),
+    method = "loess",
+    colour = "grey40",
+    se = FALSE
+  ) +
+  geom_text_repel(
+    aes(label = label),
+    show.legend = FALSE
+  ) +
+  scale_x_log10(
+    breaks = breaks_log(n = 8),
+    labels = label_comma(),
+    position = "top",
+    guide = guide_axis(angle = 45)
+  ) +
+  scale_size_area(
+    breaks = c(1e6, 1e7, 1e8, 1e9),
+    labels = label_number(scale_cut = cut_short_scale()),
+    max_size = 18,
+    name = "Population"
+  ) +
+  scale_colour_brewer(
+    palette = "Dark2",
+    name = "Region"
+  ) +
+  labs(
+    title = "Life Expectancy vs GDP per Capita by Country (2024)",
+    subtitle = "Bubble area is proportional to population",
+    x = "GDP per Capita (PPP, log scale)",
+    y = "Life Expectancy (years)",
+    caption = "Source: World Bank (2024)"
+  ) +
+  guides(
+    color = guide_legend(
+      order = 1,
+      override.aes = list(alpha = 1, size = 4)
+    ),
+    size = guide_legend(
+      order = 2,
+      reverse = TRUE
+    )
+  )
+```
+
+Does moving the x-axis guide to the top improve or worsen the presentation of the Preston curve? Keep or reject the change, and justify your decision.
+
+Improve, Keep the change. It helps the reader to immediately reference the GDP per capita from the title of the graph instead of having duplicate mention of the GDP per capita if the x-axis were to be at the bottom, which requires the x-axis label again.
+
+4.12 Write at least four sentences about the data, choosing one surprising or noteworthy feature revealed by the plot. If you refer to specific countries, ensure their codes appear as labels in the plot (add them to the label column if necessary). Cite a publication from a trustworthy source that addresses whether the feature is indeed plausible.
+
+From the Preston Curve, we are able to derive that life expectancy rises steeply with GDP per capita at low income levels but flattens considerably beyond roughly $30,000–$75,000 PPP, and falls after. One surprising factor would be how life expectancy in the US falling below the LOESS trend line, which would be different from what we expect from a high income country as comapred to the East Asian or European Nations. This can also be referenced from an article by The Peterson-KFF Health System Tracker, which is a reputable, well-regarded publication, a collaboration between the Peterson Center on Healthcare and the Kaiser Family Foundation. According to the Peterson-KFF Health System Tracker, the United States spends far more on healthcare per capita than any comparable wealthy nation yet achieves a lower life expectancy than most of them which is a pattern clearly visible as an outlier below the LOESS trend line in the plot that was produced. 
+
+Source: https://www.healthsystemtracker.org/chart-collection/u-s-life-expectancy-compare-countries/
