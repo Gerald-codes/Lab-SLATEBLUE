@@ -1,6 +1,5 @@
 ---
 title: "Week 08 Lab: Preston Curve"
-subtitle: "Preston Curve"
 author: "Team SLATEBLUE"
 date: "2026-06-23"
 format:
@@ -27,7 +26,7 @@ library(ggrepel)
 library(scales)
 ```
 
-3.1 Importing Indicator Data
+## 3.1 Importing Indicator Data
 ```{r}
 #| label: import-data
 gdp_data <- read_excel(
@@ -50,10 +49,9 @@ p_data <- read_excel(
 ```
 
 
-
-Verifier Task - Ensure the 3 columns stated are present and none of the 2024 columns are empty
+### Verifier Task: Ensure the 3 columns stated are present and none of the 2024 columns are empty
 ```{r}
-
+#| label: verify-indicator-data
 required_cols <- c("Country Name", "Country Code", "2024")
 
 required_cols %in% names(gdp_data)
@@ -82,20 +80,13 @@ checks <- tibble(
 checks
 ```
 
-3.2 Selecting Relevant Columns
+All three imported tibbles contain `Country Name`, `Country Code`, and `2024`. They also have the same number of rows, and each `2024` column contains at least one non-missing value.
+
+## 3.2 Selecting Relevant Columns
 
 ```{r}
-gdp_data <- gdp_data %>%
-  select(`Country Name`, `Country Code`, `2024`)
+#| label: select-indicator-columns
 
-le_data <- le_data %>%
-  select(`Country Name`, `Country Code`, `2024`)
-
-p_data <- p_data %>%
-  select(`Country Name`, `Country Code`, `2024`)
-```
-
-```{r}
 gdp_data <- gdp_data %>%
   select(
     name = `Country Name`,
@@ -118,8 +109,11 @@ p_data <- p_data %>%
   )
 ```
 
-3.3 Merge Indicator Data
+## 3.3 Merge Indicator Data
+
 ```{r}
+#| label: merge-indicator-data
+
 countries <- gdp_data %>%
   left_join(le_data, by = c("name", "code")) %>%
   left_join(p_data, by = c("name", "code"))
@@ -128,11 +122,16 @@ glimpse(countries)
 ```
 
 ```{r}
+#| label: inspect-countries-columns
+
 names(countries)
 ```
 
-3.4 Import World Bank Region Data
+## 3.4 Import World Bank Region Data
+
 ```{r}
+#| label: import-world-bank-metadata
+
 metadata <- read_excel(
   "API_NY.GDP.PCAP.PP.KD_DS2_en_excel_v2_417139.xls",
   sheet = "Metadata - Countries"
@@ -145,17 +144,11 @@ metadata <- read_excel(
 glimpse(metadata)
 ```
 
-Verifier Task - Confirm country code present in metadata are in countries.
+### Verifier Task: Country Code Matching
 
 ```{r}
-all(metadata$code %in% countries$code)
-```
+#| label: verify-country-code-matching
 
-```{r}
-all(countries$code %in% metadata$code)
-```
-
-```{r}
 countries_in_metadata <-
   nrow(countries %>% anti_join(metadata, by = "code")) == 0
 
@@ -166,8 +159,13 @@ countries_in_metadata
 metadata_in_countries
 ```
 
-3.5 Merge Region data with the Indicators
+All country codes in `metadata` are present in `countries`. The converse is not necessarily true because `countries` may contain aggregate entries or income groups that do not have a corresponding country-level region entry in the metadata.
+
+## 3.5 Merge Region Data with the Indicators
+
 ```{r}
+#| label: merge-regions-with-indicators
+
 countries <- countries %>%
   left_join(metadata, by = "code")
 ```
@@ -180,28 +178,40 @@ nrow(countries)
 names(countries)
 ```
 
-Verifier Task - Confirm the number of rows before and after
+### Verifier Task: Row Count Before and After Join
+
 ```{r}
+#| label: verify-region-join-row-count
+
 countries_rows <- nrow(countries)
 
 nrow(countries) == countries_rows
 ```
 
+The row count remained the same before and after the join. This confirms that the join added region information without adding or removing entries from `countries`.
+
 ```{r}
+#| label: inspect-countries-after-region-join
+
 names(countries)
 ```
 
-3.6 Missing Missing Data
+## 3.6 Remove Missing Data
+
 ```{r}
+#| label: remove-missing-data
+
 countries <- countries %>%
   drop_na()
 
 sum(is.na(countries))
 ```
 
-3.7 Prepare Country Labels based on GDP and life expectancy
+## 3.7 Prepare Country Labels
+
 ```{r}
-# Get the country codes to label
+#| label: prepare-country-labels
+
 label_codes <- countries %>%
   filter(
     gdp_per_cap >= nth(sort(gdp_per_cap, decreasing = TRUE), 10) |
@@ -220,14 +230,18 @@ countries <- countries %>%
 ```
 
 ```{r}
+#| label: inspect-country-labels
+
 countries %>%
   filter(label != "") %>%
   select(name, code, label)
 ```
 
-Verifier Task - Confirm countries have the following labels
+### Verifier Task: Final Countries Columns and Missing Values
 
 ```{r}
+#| label: verify-final-countries-table
+
 names(countries)
 ```
 ```{r}
@@ -247,14 +261,20 @@ list(
 )
 ```
 
-
-4 Visualizing the Data
-
-4.1 Scale Audit
+At this point, `countries` contains exactly the required columns and no missing values.
 
 
-4.2 Set up Basic Plot
+
+# 4 Visualizing the Data
+
+# 4.1 Scale Audit
+
+The final plot follows the scale audit. GDP per capita is shown on a logarithmic x-axis, life expectancy uses a linear y-axis, population is represented using an area-proportional size scale, region is displayed using a qualitative colour palette, and country codes are shown as direct labels without a separate legend.
+
+## 4.2 Set Up Basic Plot
 ```{r}
+#| label: basic-bubble-plot
+
 ggplot(
   countries,
   aes(
@@ -268,8 +288,11 @@ ggplot(
 ```
 
 
-4.3 Add Country Labels
+## 4.3 Add Country Labels
+
 ```{r}
+#| label: add-country-labels
+
 ggplot(
   countries,
   aes(
@@ -286,8 +309,11 @@ ggplot(
   )
 ```
 
-4.4 Add Trend Curves
+## 4.4 Add Trend Curve
+
 ```{r}
+#| label: add-weighted-loess-curve
+
 ggplot(
   countries,
   aes(
@@ -314,8 +340,11 @@ ggplot(
   )
 ```
 
-Verifier Task - Add second unweighted plot in contrasting color
+### Verifier Task: Weighted and Unweighted LOESS Curves
+
 ```{r}
+#| label: verify-weighted-loess-effect
+
 ggplot(
   countries,
   aes(
@@ -347,8 +376,13 @@ ggplot(
   )
 ```
 
-4.5 Add Annotations
+The weighted and unweighted LOESS curves are not identical. The population-weighted curve is influenced more strongly by highly populous countries, so this confirms that `weight = pop` changes the fitted trend. The temporary unweighted curve is only used for this check and we did not removed from the final plot in order to come back to visualize.
+
+## 4.5 Add Annotations
+
 ```{r}
+#| label: add-plot-annotations
+
 ggplot(
   countries,
   aes(
@@ -383,8 +417,11 @@ ggplot(
   )
 ```
 
-4.6 Add x-Axis Scale
+## 4.6 Change x-Axis Scale
+
 ```{r}
+#| label: add-log-x-axis
+
 ggplot(countries, aes(x = gdp_per_cap, y = life_exp)) +
   geom_point(aes(size = pop, colour = region), alpha = 0.6) +
   geom_smooth(
@@ -393,7 +430,6 @@ ggplot(countries, aes(x = gdp_per_cap, y = life_exp)) +
     colour = "grey40",
     se = FALSE
   ) +
-  geom_smooth(method = "loess", colour = "red", se = FALSE) +
   geom_text_repel(aes(label = label), show.legend = FALSE) +
   scale_x_log10(
     breaks = breaks_log(n = 8),
@@ -410,9 +446,12 @@ ggplot(countries, aes(x = gdp_per_cap, y = life_exp)) +
   )
 ```
 
-4.7 Reason choice of Log Axis Ticks
+Using `label_comma()` is clearer here than `label_currency()` because the GDP measure is already described in the x-axis title as PPP-adjusted constant international dollars. Adding a dollar sign to every tick may look cleaner, but it can also make the axis more visually crowded and may overemphasize the currency symbol instead of the numeric scale. Therefore, comma formatting is enough for the tick labels while the full unit is kept in the axis title.
+
+## 4.7 Reason about the Choice of Logarithmic Axis Ticks
+
 ```{r}
-# Create a colour for each region
+#| label:  Create a colour for each region
 region_colours <- scales::hue_pal()(length(unique(countries$region)))
 names(region_colours) <- unique(countries$region)
 
@@ -444,11 +483,15 @@ legend(
   bty = "n"
 )
 ```
+
 - One other advantage of ggplot2 approach: It shows equal ratios for the same equal visual distances, such as from 1000 to 3000, and for 10,000 to 30,000. GDP per capita typically varies by orders of magnitude across countries, hence ratio comparisons will be more meaningful than absolute differences.
 - For a gapminder chart, Gapminder's doubling scheme places each tick at twice the previous value, such as from 1000 to 2000 and for 10,000 to 20,000, so equal distances along the axis represent the same multiplicative factor, making it easy to see how many times richer one country is than another.
 
-4.8 Change Size Scale
+## 4.8 Change Size Scale
+
 ```{r}
+#| label: add-area-proportional-size-scale
+
 ggplot(countries, aes(x = gdp_per_cap, y = life_exp)) +
   geom_point(
     aes(size = pop, colour = region),
@@ -486,11 +529,16 @@ ggplot(countries, aes(x = gdp_per_cap, y = life_exp)) +
     caption = "Source: World Bank (2024)"
   )
 ```
-Verifier Task - Confirm physical measurements of legend
-142/42 = 3.38 (using built-in screenshot tool for quick pixel counts to compare)
 
-4.9 Change Color Scheme
+### Verifier Task: Area Principle
+
+The measured ratio between the 100M and 10M legend keys was approximately `142 / 42 = 3.38` (using built-in screenshot tool for quick pixel counts to compare), which is close to `sqrt(10) = 3.16`. The small difference is likely due to screen resolution, manual measurement, and the way the legend is rendered.
+
+## 4.9 Change Colour Scale
+
 ```{r}
+#| label: add-qualitative-colour-scale
+
 ggplot(countries, aes(x = gdp_per_cap, y = life_exp)) +
   geom_point(
     aes(size = pop, colour = region),
@@ -529,14 +577,22 @@ ggplot(countries, aes(x = gdp_per_cap, y = life_exp)) +
   )
 ```
 
-Verifier Task - Confirm color legend matches no. of distinct regions
+### Verifier Task: Colour Legend Categories
+
 ```{r}
+#| label: verify-colour-legend-categories
+
 countries %>%
   summarise(n_regions = n_distinct(region))
 ```
 
-4.10 Refining Guides
+The colour legend should show the same number of keys as the number of distinct regions in `countries`. This confirms that every region in the data is represented in the discrete colour scale.
+
+## 4.10 Refine Guides
+
 ```{r}
+#| label: refine-guides-final-plot
+
 ggplot(countries, aes(x = gdp_per_cap, y = life_exp)) +
   geom_point(
     aes(size = pop, colour = region),
@@ -585,20 +641,28 @@ ggplot(countries, aes(x = gdp_per_cap, y = life_exp)) +
   )
 ```
 
-a. In your opinion, should the color or size legend appear at the top? Why?
+### Guide Questions
+
+**a. In your opinion, should the colour or size legend appear at the top? Why?**
+
 No, if the legend is on top/below of the graph, it will be hard for the user to reference the legend visually as they will have to scroll up/down to reference the legend especially if the graphs is bigger.
 
-b. Does reversing the size legend make the population mapping easier to read? Why?
+**b. Does reversing the size legend make the population mapping easier to read? Why?**
+
 Yes, showing the larger area bubble on the legend showing larger population will help as they are more visually dominant and reduces the cognitive load as there will not be a need for mental reversal to match the bubble on plot to the legend from small to large.
 
-c. Why should the color legend use opaque symbols (alpha = 1) although the plotted points are semi-transparent?
+**c. Why should the colour legend use opaque symbols (`alpha = 1`) although the plotted points are semi-transparent?**
+
 To allow the readers to easily identify which color maps to which region quickly, as the semi-transparent serves a different purpose when used to describe the data on the plot.
 
 
-4.11 Compare Axis Guides
+## 4.11 Compare Axis Guides
+
 As an experiment with axis guide positioning, create a temporary version of your plot with the x-axis guide moved to the top (using the guide_axis() function). You may wish to consult Section 12.1 in the textbook.
 
 ```{r}
+#| label: compare-top-x-axis-guide
+
 ggplot(countries, aes(x = gdp_per_cap, y = life_exp)) +
   geom_point(
     aes(size = pop, colour = region),
@@ -649,12 +713,33 @@ ggplot(countries, aes(x = gdp_per_cap, y = life_exp)) +
   )
 ```
 
-Does moving the x-axis guide to the top improve or worsen the presentation of the Preston curve? Keep or reject the change, and justify your decision.
+**Does moving the x-axis guide to the top improve or worsen the presentation of the Preston curve? Keep or reject the change, and justify your decision.** 
 
 Improve, Keep the change. It helps the reader to immediately reference the GDP per capita from the title of the graph instead of having duplicate mention of the GDP per capita if the x-axis were to be at the bottom, which requires the x-axis label again.
 
-4.12 Write at least four sentences about the data, choosing one surprising or noteworthy feature revealed by the plot. If you refer to specific countries, ensure their codes appear as labels in the plot (add them to the label column if necessary). Cite a publication from a trustworthy source that addresses whether the feature is indeed plausible.
+## 4.12 Reason about the Data
+
+**Write at least four sentences about the data, choosing one surprising or noteworthy feature revealed by the plot.**
 
 From the Preston Curve, we are able to derive that life expectancy rises steeply with GDP per capita at low income levels but flattens considerably beyond roughly $30,000–$75,000 PPP, and falls after. One surprising factor would be how life expectancy in the US falling below the LOESS trend line, which would be different from what we expect from a high income country as comapred to the East Asian or European Nations. This can also be referenced from an article by The Peterson-KFF Health System Tracker, which is a reputable, well-regarded publication, a collaboration between the Peterson Center on Healthcare and the Kaiser Family Foundation. According to the Peterson-KFF Health System Tracker, the United States spends far more on healthcare per capita than any comparable wealthy nation yet achieves a lower life expectancy than most of them which is a pattern clearly visible as an outlier below the LOESS trend line in the plot that was produced. 
 
-Source: https://www.healthsystemtracker.org/chart-collection/u-s-life-expectancy-compare-countries/
+Source: Peterson-KFF Health System Tracker, "How does U.S. life expectancy compare to other countries?", https://www.healthsystemtracker.org/chart-collection/u-s-life-expectancy-compare-countries/
+
+# 5 Completing the Submission
+
+## 5.1 Reflect on AI Use
+Our team used ChatGPT as our chosen AI tool throughout the lab. One useful suggestion was helping us understand the purpose of the verifier tasks, particularly the checks involving joins, logarithmic scales, and the area principle for bubble sizes. This helped us verify our work more efficiently and ensured that our interpretations matched the requirements of the lab.
+
+One AI response that we did not use directly was a suggestion to create an additional plot for one of the discussion questions. After reviewing the lab instructions, we realised that the task only required a written explanation rather than another visualization. We compared the suggestion against the task requirements and chose a simpler approach that better matched the instructions.
+
+## 5.2 Team Roles and Contributions
+
+Bao Quan served as the Coder and was responsible for creating and maintaining the main .qmd file, importing the datasets, and ensuring that the document rendered successfully. 
+
+Jun Kiat acted as the Navigator by guiding the team's progress, interpreting the task requirements, and ensuring that all sections were completed. 
+
+Jia Jia took on the role of Verifier and carried out the required validation checks, including data verification, join checks, scale verification, and legend checks. 
+
+Gerald served as the Constructive Critic and Reporter by reviewing the team's explanations, improving the clarity of written responses, and preparing explanations for the team's plotting decisions. 
+
+Adam acted as the AI Liaison by interacting with the chosen AI tool, maintaining the AI interaction log, and evaluating AI suggestions before they were incorporated into the submission.
