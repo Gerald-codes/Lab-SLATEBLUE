@@ -17,6 +17,7 @@ execute:
   message: false
 ---
 
+## 3.2 Start Coding
 ```{r}
 #| label: setup
 #| message: false
@@ -28,7 +29,148 @@ library(purrr)
 library(readr)
 library(stringr)
 library(tibble)
-library(tidy)
+library(tidyverse)
+library(stars)
+library(scales)
+library(ggnewscale)
+library(units)
 ```
 
-# Identifying Maps of El Niño and La Niña
+## 3.3 Import the Daily Grids as stars Data Cubes
+```{r}
+#| label: locate-daily-files
+
+files_2009 <- list.files(
+  "oisst_lab_data/oisst_daily/el_nino_2009-12",
+  pattern = "\\.nc$",
+  full.names = TRUE
+) |>
+  sort()
+
+files_2010 <- list.files(
+  "oisst_lab_data/oisst_daily/la_nina_2010-12",
+  pattern = "\\.nc$",
+  full.names = TRUE
+) |>
+  sort()
+
+length(files_2009)
+
+stopifnot(
+  length(files_2009) == 31,
+  length(files_2010) == 31
+)
+
+c(
+  first_2009 = basename(first(files_2009)),
+  last_2009 = basename(last(files_2009)),
+  first_2010 = basename(first(files_2010)),
+  last_2010 = basename(last(files_2010))
+)
+```
+
+### 3.3.1 Inspect Imported Data via read_star
+```{r}
+# December 2009: 31 daily grids
+dec_2009 <- read_stars(files_2009, sub = c("anom", "ice"), along="time")
+
+# December 2010: 31 daily grids
+dec_2010 <- read_stars(files_2010, sub = c("anom", "ice"), along="time")
+
+# Inspect
+dec_2009
+dec_2010
+```
+
+## 3.4 Establish the Coordinate Reference System
+``` {r}
+# Assign EPSG:4326 to both stars objects
+dec_2009 <- st_set_crs(dec_2009, 4326)
+dec_2010 <- st_set_crs(dec_2010, 4326)
+
+# Check CRS
+st_crs(dec_2009)
+st_crs(dec_2010)
+
+# check boundary
+st_bbox(dec_2009)
+st_bbox(dec_2010)
+```
+
+## 3.5 Calculate monthly summaries
+## Monthly cell summaries
+
+```{r}
+#| label: monthly-summary-function
+
+summarise_month <- function(daily_cube) {
+  mean_anom <- st_apply(
+    daily_cube["anom"],
+    c("x", "y"),
+    mean,
+    na.rm = TRUE
+  )
+  names(mean_anom) <- "mean_anom"
+
+  ice_zero <- daily_cube["ice"]
+  ice_zero[[1]][is.na(ice_zero[[1]])] <- 0
+
+  mean_ice <- st_apply(
+    ice_zero,
+    c("x", "y"),
+    mean
+  )
+  names(mean_ice) <- "mean_ice"
+
+  result <- c(mean_anom, mean_ice) |>
+    mutate(
+      land = is.nan(mean_anom) & mean_ice == 0,
+      mean_ice = replace(mean_ice, land, NA_real_)
+    )
+
+  result[c("land", "mean_anom", "mean_ice")]
+}
+```
+
+```{r}
+#| label: calculate-monthly-summaries
+
+summary_2009 <- summarise_month(dec_2009)
+summary_2010 <- summarise_month(dec_2010)
+```
+
+## Verifier Task
+```{r}
+#| label: verify-monthly-summaries
+
+verify_monthly_summary <- function(monthly, daily) {
+  non_land_ice <- monthly$mean_ice[!monthly$land]
+
+  stopifnot(
+    all(dim(monthly) == c(1440, 720)),
+    identical(names(st_dimensions(monthly)), c("x", "y")),
+    identical(names(monthly), c("land", "mean_anom", "mean_ice")),
+    !anyNA(monthly$land),
+    all(is.na(monthly$mean_ice) == monthly$land),
+    min(non_land_ice, na.rm = TRUE) >= 0,
+    max(non_land_ice, na.rm = TRUE) <= 1,
+    isTRUE(all.equal(st_bbox(monthly), st_bbox(daily))),
+    isTRUE(all.equal(st_res(monthly), st_res(daily))),
+    st_crs(monthly) == st_crs(daily)
+  )
+
+  tibble(
+    dimensions = paste(dim(monthly), collapse = " × "),
+    land_cells = sum(monthly$land),
+    non_land_cells = sum(!monthly$land),
+    minimum_ice = min(non_land_ice, na.rm = TRUE),
+    maximum_ice = max(non_land_ice, na.rm = TRUE)
+  )
+}
+
+bind_rows(
+  `2009` = verify_monthly_summary(summary_2009, dec_2009),
+  `2010` = verify_monthly_summary(summary_2010, dec_2010),
+  .id = "year"
+)
+```
