@@ -17,6 +17,21 @@ execute:
   message: false
 ---
 
+## 3.1 Plan the Map Encodings
+
+### a. Why should anom, rather than sst, determine the principal fill colors?
+
+Sea-surface temperature (sst) varies naturally with latitude and location, so a map of absolute temperatures is dominated by geographic differences. In contrast, anom shows how much the temperature differs from the normal value at each location, making unusual warming and cooling patterns such as El Niño and La Niña easier to identify.
+
+### b. Should the anomaly scale be sequential or diverging? What does its central value represent?
+
+A diverging scale should be used because anomalies can be both positive and negative. Its central value is 0 °C, representing no difference from the climatological average, with colours on either side showing warmer-than-normal and cooler-than-normal conditions.
+
+### c. Why should both panels use identical anomaly-scale limits?
+
+Both panels should use the same anomaly-scale limits so that the same colour always represents the same temperature difference. Using different limits would make the two years difficult to compare because identical anomalies could appear as different colours.
+
+
 ## 3.2 Start Coding
 ```{r}
 #| label: setup
@@ -41,14 +56,14 @@ library(units)
 #| label: locate-daily-files
 
 files_2009 <- list.files(
-  "oisst_lab_data/oisst_daily/el_nino_2009-12",
+  "oisst_daily/el_nino_2009-12",
   pattern = "\\.nc$",
   full.names = TRUE
 ) |>
   sort()
 
 files_2010 <- list.files(
-  "oisst_lab_data/oisst_daily/la_nina_2010-12",
+  "oisst_daily/la_nina_2010-12",
   pattern = "\\.nc$",
   full.names = TRUE
 ) |>
@@ -72,33 +87,52 @@ c(
 ### 3.3.1 Inspect Imported Data via read_star
 ```{r}
 # December 2009: 31 daily grids
-dec_2009 <- read_stars(files_2009, sub = c("anom", "ice"), along="time")
+dec_2009 <- read_stars(files_2009, sub = c("anom", "ice"), along = "time")
 
 # December 2010: 31 daily grids
-dec_2010 <- read_stars(files_2010, sub = c("anom", "ice"), along="time")
-
-# Inspect
-dec_2009
-dec_2010
+dec_2010 <- read_stars(files_2010, sub = c("anom", "ice"), along = "time")
 ```
+
+### Verifier Task: Imported Daily Grids
+```{r}
+#| label: verify-imported-daily-grids
+
+names(dec_2009)
+dim(dec_2009)
+names(st_dimensions(dec_2009))
+st_get_dimension_values(dec_2009, "time")
+
+names(dec_2010)
+dim(dec_2010)
+names(st_dimensions(dec_2010))
+st_get_dimension_values(dec_2010, "time")
+```
+
+Both `dec_2009` and `dec_2010` contain exactly the two required attributes, `anom` and `ice`. Each object has dimensions 1440 × 720 × 31, named `x`, `y`, and `time`. The time values are arranged chronologically from December 1 to December 31 for the correct year.
 
 ## 3.4 Establish the Coordinate Reference System
 ``` {r}
 # Assign EPSG:4326 to both stars objects
 dec_2009 <- st_set_crs(dec_2009, 4326)
 dec_2010 <- st_set_crs(dec_2010, 4326)
+```
 
-# Check CRS
-st_crs(dec_2009)
-st_crs(dec_2010)
+### Verifier Task: Coordinate Reference System
+```{r}
+#| label: verify-crs
 
-# check boundary
+# Confirm the CRS has been assigned correctly
+st_crs(dec_2009) == st_crs(4326)
+st_crs(dec_2010) == st_crs(4326)
+
+# Confirm the bounding boxes are unchanged
 st_bbox(dec_2009)
 st_bbox(dec_2010)
 ```
 
-## 3.5 Calculate monthly summaries
-## Monthly cell summaries
+The CRS for both `dec_2009` and `dec_2010` was successfully assigned as WGS 84 (EPSG:4326), with both verification expressions returning `TRUE`. The bounding boxes remained unchanged (`xmin = 0`, `ymin = -90`, `xmax = 360`, `ymax = 90`), confirming that assigning the CRS only added spatial reference information and did not modify the coordinate values.
+
+## 3.5 Calculate Monthly cell summaries
 
 ```{r}
 #| label: monthly-summary-function
@@ -112,9 +146,11 @@ summarise_month <- function(daily_cube) {
   )
   names(mean_anom) <- "mean_anom"
 
+  # Treat missing daily sea-ice values as zero
   ice_zero <- daily_cube["ice"]
   ice_zero[[1]][is.na(ice_zero[[1]])] <- 0
 
+  # Calculate mean sea-ice concentration across all 31 days
   mean_ice <- st_apply(
     ice_zero,
     c("x", "y"),
@@ -122,6 +158,7 @@ summarise_month <- function(daily_cube) {
   )
   names(mean_ice) <- "mean_ice"
 
+  # Combine the summaries and identify land cells
   result <- c(mean_anom, mean_ice) |>
     mutate(
       land = is.nan(mean_anom) & mean_ice == 0,
@@ -139,7 +176,7 @@ summary_2009 <- summarise_month(dec_2009)
 summary_2010 <- summarise_month(dec_2010)
 ```
 
-## Verifier Task
+### Verifier Task: Monthly Cell Summaries
 ```{r}
 #| label: verify-monthly-summaries
 
@@ -175,6 +212,8 @@ bind_rows(
 )
 ```
 
+Both monthly summary objects have dimensions 1440 × 720 and no longer contain a time dimension. They contain exactly the attributes land, mean_anom, and mean_ice. The verification checks also confirm that land has no missing values, mean_ice is missing only at land cells and otherwise lies between 0 and 1, and the spatial extent, resolution, and CRS remain unchanged from the corresponding daily data cubes.
+
 ## 3.6 Derive Surface Classes
 
 ```{r}
@@ -183,21 +222,25 @@ bind_rows(
 add_surface_class <- function(monthly) {
   # start with everything as "open ocean"
   surface_values <- rep("open ocean", length(monthly$land))
-  
+
   # land first
   surface_values[monthly$land] <- "land"
-  
+
   # sea ice: mean_ice >= 0.15 OR anomaly missing
-  surface_values[!monthly$land & 
-                 (monthly$mean_ice >= 0.15 | is.na(monthly$mean_anom))] <- "sea ice"
-  
+  surface_values[
+    !monthly$land &
+      (monthly$mean_ice >= 0.15 | is.na(monthly$mean_anom))
+  ] <- "sea ice"
+
   # turn into factor with correct levels
-  surface_values <- factor(surface_values,
-                           levels = c("land", "sea ice", "open ocean"))
-  
+  surface_values <- factor(
+    surface_values,
+    levels = c("land", "sea ice", "open ocean")
+  )
+
   # reshape back to the same dimensions as land
   dim(surface_values) <- dim(monthly$land)
-  
+
   # add as new attribute
   monthly$surface <- surface_values
   monthly
@@ -207,9 +250,13 @@ summary_2009 <- add_surface_class(summary_2009)
 summary_2010 <- add_surface_class(summary_2010)
 ```
 
-### 3.6 Verifier Task
-``` {r}
+### Verifier Task: Surface Classes
+
+```{r}
 ## 1. All surface values are valid and non-missing
+!anyNA(summary_2009$surface)
+!anyNA(summary_2010$surface)
+
 all(summary_2009$surface %in% c("land", "sea ice", "open ocean"))
 all(summary_2010$surface %in% c("land", "sea ice", "open ocean"))
 
@@ -218,69 +265,115 @@ all(summary_2010$surface %in% c("land", "sea ice", "open ocean"))
 all(summary_2009$surface[summary_2009$mean_ice >= 0.15] == "sea ice")
 all(summary_2010$surface[summary_2010$mean_ice >= 0.15] == "sea ice")
 
-all(summary_2009$surface[!summary_2009$land & is.na(summary_2009$mean_anom)] == "sea ice")
-all(summary_2010$surface[!summary_2010$land & is.na(summary_2010$mean_anom)] == "sea ice")
+all(
+  summary_2009$surface[
+    !summary_2009$land & is.na(summary_2009$mean_anom)
+  ] ==
+    "sea ice"
+)
 
-## 3. Every "open ocean" cell has nonmissing mean_anom and mean_ice < 0.15
-all(!is.na(summary_2009$mean_anom[summary_2009$surface == "open ocean"]))
-all(!is.na(summary_2010$mean_anom[summary_2010$surface == "open ocean"]))
+all(
+  summary_2010$surface[
+    !summary_2010$land & is.na(summary_2010$mean_anom)
+  ] ==
+    "sea ice"
+)
 
-all(summary_2009$mean_ice[summary_2009$surface == "open ocean"] < 0.15)
-all(summary_2010$mean_ice[summary_2010$surface == "open ocean"] < 0.15)
+## 3. Every "open ocean" cell has non-missing mean_anom
+##    and mean_ice < 0.15
+!anyNA(
+  summary_2009$mean_anom[
+    summary_2009$surface == "open ocean"
+  ]
+)
+
+!anyNA(
+  summary_2010$mean_anom[
+    summary_2010$surface == "open ocean"
+  ]
+)
+
+all(
+  summary_2009$mean_ice[
+    summary_2009$surface == "open ocean"
+  ] <
+    0.15
+)
+
+all(
+  summary_2010$mean_ice[
+    summary_2010$surface == "open ocean"
+  ] <
+    0.15
+)
 ```
+
+Both monthly summary objects contain only the three valid surface classes: land, sea ice, and open ocean, with no missing classifications. All cells with a monthly mean sea-ice concentration of at least 0.15, as well as non-land cells with a missing monthly anomaly, are classified as sea ice. Every open ocean cell has a nonmissing anomaly and a monthly mean sea-ice concentration below 0.15.
 
 ## 3.7 Combine the Monthly Summaries Along a Year Dimension
 ``` {r}
 # Combine along new dimension
-combined <- c(summary_2009[c("mean_anom", "surface")],
-              summary_2010[c("mean_anom", "surface")],
-              along = 3)
+dec_summaries <- c(
+  summary_2009[c("mean_anom", "surface")],
+  summary_2010[c("mean_anom", "surface")],
+  along = 3
+)
 
 # Rename the third dimension to "year" and assign values
-combined <- st_set_dimensions(
-  combined,
-  which = 3,                # the third dimension
-  names = "year",           # new dimension name
-  values = c(2009, 2010)    # values for that dimension
+dec_summaries <- st_set_dimensions(
+  dec_summaries,
+  which = 3, # the third dimension
+  names = "year", # new dimension name
+  values = c(2009, 2010) # values for that dimension
 )
 
 # Inspect
-st_dimensions(combined)
+st_dimensions(dec_summaries)
 ```
 
-## 3.7 Verifer
+### Verifier Task: Combined Monthly Summaries
 ``` {r}
 
 # 1. Dimensions are named x, y, and year with lengths 1440, 720, and 2
-st_dimensions(combined)
+st_dimensions(dec_summaries)
+dim(dec_summaries)
 
 # 2. Year values are 2009 and 2010
-st_get_dimension_values(combined, "year")
-# Expected: 2009 2010
+st_get_dimension_values(dec_summaries, "year")
 
 # 3. Attributes are exactly mean_anom and surface
-names(combined)
-# Expected: "mean_anom" "surface"
+names(dec_summaries)
 
 # 4. Bounding box, resolution, and CRS match the originals
-st_bbox(combined)
-st_dimensions(combined)$x$delta
-st_dimensions(combined)$y$delta
-st_crs(combined)
+isTRUE(all.equal(st_bbox(dec_summaries), st_bbox(summary_2009)))
+isTRUE(all.equal(st_bbox(dec_summaries), st_bbox(summary_2010)))
 
+isTRUE(all.equal(st_res(dec_summaries), st_res(summary_2009)))
+isTRUE(all.equal(st_res(dec_summaries), st_res(summary_2010)))
+
+st_crs(dec_summaries) == st_crs(summary_2009)
+st_crs(dec_summaries) == st_crs(summary_2010)
 ```
+
+The combined object, dec_summaries, has dimensions x, y, and year, with lengths 1440, 720, and 2. The year dimension contains the values 2009 and 2010, and the object contains only the mean_anom and surface attributes. Its bounding box, spatial resolution, and CRS are unchanged from both monthly summary objects.
 
 ## 3.8 Draft a First Faceted Raster Map
 ```{r}
 #| label: draft-faceted-map
 #| fig-width: 10
 #| fig-height: 8
-dec_summaries <- combined
 
 ggplot() +
   geom_stars(data = dec_summaries, aes(fill = mean_anom)) +
   facet_wrap(~year, ncol = 1)
 ```
+
+Shortcoming List:
+1. The default colour scale is not centred at 0 degree celsius, making it difficult to distinguish positive anomalies from negative anomalies.
+2. Land and sea ice are both displayed in grey, so they cannot be distinguished from one another.
+3. The map lacks a title, subtitle and contextual information, making it difficult for readers to understand what the map represents.
+4. Regions near the poles appear much larger than comparable regions near the equator, making comparisons of the spatial extent of anomalies across different latitudes misleading.
+
 
 ## 3.9 Design a Diverging Fill Scale
 
@@ -299,7 +392,9 @@ dec_summaries$open_ocean_anom <- open_ocean_anom
 anom_values <- c(dec_summaries$open_ocean_anom)
 
 # Compute 99th percentile of absolute values
-limit <- quantile(abs(anom_values), probs = 0.99, na.rm = TRUE)
+limit <- ceiling(
+  quantile(abs(anom_values), probs = 0.99, na.rm = TRUE)
+)
 
 limit
 ```
@@ -311,32 +406,27 @@ limit
 #| fig-height: 8
 
 ggplot() +
-  geom_stars(data = dec_summaries, aes(fill = mean_anom)) +
+  geom_stars(data = dec_summaries, aes(fill = open_ocean_anom)) +
   facet_wrap(vars(year), ncol = 1) +
   scale_fill_distiller(
     name = "SST anomaly (°C)",
-    type = "div",          # diverging palette
-    palette = "RdYlBu",    # ColorBrewer RdYlBu
-    direction = -1,        # reverse so blue = negative, red = positive
-    limits = c(-limit, limit),  # symmetric endpoints
-    oob = squish,          # squish values outside limits
-    na.value = "transparent"    # land/sea ice left neutral
-  ) +
-  theme_minimal()
+    type = "div", # diverging palette
+    palette = "RdYlBu", # ColorBrewer RdYlBu
+    direction = -1, # reverse so blue = negative, red = positive
+    limits = c(-limit, limit), # symmetric endpoints
+    oob = scales::squish, # squish values outside limits
+    na.value = "transparent" # land/sea ice left neutral
+  )
 ```
 
 ## 3.10 Add Land and Sea Ice as Surface Layers
 ``` {r}
-# Define mapping from year values to labels
-year_labels <- c(
-  "2009" = "December 2009 (El Niño)",
-  "2010" = "December 2010 (La Niña)"
-)
+#| label: define-surface-colours
 
 # Define surface colours
 surface_colours <- c(
-  "land"       = "grey70",
-  "sea ice"    = "white",
+  "land" = "grey70",
+  "sea ice" = "white",
   "open ocean" = "transparent"
 )
 
@@ -344,12 +434,13 @@ surface_colours
 ```
 
 ``` {r}
+#| label: define-surface-legend
 # Only land and sea ice should appear in the legend
 surface_breaks <- c("land", "sea ice")
 
 # Custom labels for those categories
 surface_labels <- c(
-  "land"    = "Land",
+  "land" = "Land",
   "sea ice" = "Sea-ice concentration ≥ 15%"
 )
 
@@ -359,20 +450,88 @@ surface_labels
 
 ### 3.10.1 Plot
 ``` {r}
+#| label: plot-surface-layers
 ggplot() +
-  geom_stars(data = dec_summaries, aes(fill = surface)) +
+  # Draw SST anomalies first
+  geom_stars(
+    data = dec_summaries,
+    aes(fill = open_ocean_anom)
+  ) +
+  scale_fill_distiller(
+    name = "SST anomaly (°C)",
+    type = "div",
+    palette = "RdYlBu",
+    direction = -1,
+    limits = c(-limit, limit),
+    oob = scales::squish,
+    na.value = "transparent"
+  ) +
+
+  # Start a new fill scale for surface types
+  new_scale_fill() +
+
+  # Draw land and sea ice above the anomalies
+  geom_stars(
+    data = dec_summaries,
+    aes(fill = surface)
+  ) +
   scale_fill_manual(
+    name = "Surface",
     values = surface_colours,
     breaks = surface_breaks,
     labels = surface_labels,
     drop = FALSE,
     na.value = "transparent"
+  ) +
+  facet_wrap(~year, ncol = 1)
+```
+
+The surface layer must be drawn above the anomaly layer so that land and sea ice cover any anomaly values beneath them. Land is shown in grey and sea ice in white, while open-ocean cells are transparent. This allows the anomaly colours to remain visible only over open ocean.
+
+### Verifier Task: Surface Layer Mask
+
+```{r}
+#| label: verify-surface-mask
+
+verify_surface_mask <- function(data) {
+  open_ocean <- data$surface == "open ocean"
+  other_surface <- data$surface != "open ocean"
+
+  stopifnot(
+    # Open-ocean cells must keep the original anomaly
+    isTRUE(all.equal(
+      data$open_ocean_anom[open_ocean],
+      data$mean_anom[open_ocean]
+    )),
+
+    # Non-open-ocean cells must be missing
+    all(is.na(data$open_ocean_anom[other_surface])),
+
+    # Open-ocean cells must never have a missing anomaly
+    !anyNA(data$open_ocean_anom[open_ocean]),
+
+    # Surface values must only contain the expected classes
+    all(data$surface %in% c("land", "sea ice", "open ocean"))
   )
 
+  tibble(
+    open_ocean_cells = sum(open_ocean),
+    land_cells = sum(data$surface == "land"),
+    sea_ice_cells = sum(data$surface == "sea ice"),
+    missing_open_ocean_anomalies = sum(is.na(data$open_ocean_anom[open_ocean])),
+    non_ocean_values_retained = sum(!is.na(data$open_ocean_anom[other_surface]))
+  )
+}
+
+verify_surface_mask(dec_summaries)
 ```
+
+The verification confirms that every open-ocean cell retains the same value in open_ocean_anom as in mean_anom, while all land and sea-ice cells are set to missing. It also confirms that no open-ocean cell has a missing anomaly. This is guaranteed by the surface-class rules because a cell is classified as open ocean only when mean_anom is available and the mean sea-ice concentration is below 0.15.
 
 ## 3.11 Compare Equal-Area World Projections
 ``` {r}
+#| label: define-projections
+
 # Equal Earth projection (central meridian at 180°)
 equal_earth_crs <- st_crs(
   "+proj=eqearth +lon_0=180 +ellps=WGS84 +R_A +units=m +no_defs +type=crs"
@@ -382,8 +541,183 @@ equal_earth_crs <- st_crs(
 mollweide_crs <- st_crs(
   "+proj=moll +lon_0=180 +ellps=WGS84 +R_A +units=m +no_defs +type=crs"
 )
-
-equal_earth_crs
-mollweide_crs
 ```
 
+```{r}
+#| label: create-world-boundary
+
+create_world_boundary <- function(crs) {
+  longitude <- seq(0.001, 359.999, by = 1)
+  latitude <- seq(-89.5, 89.5, by = 1)
+
+  bottom <- cbind(longitude, -89.5)
+  right <- cbind(359.999, latitude)
+  top <- cbind(rev(longitude), 89.5)
+  left <- cbind(0.001, rev(latitude))
+
+  boundary_coordinates <- rbind(
+    bottom,
+    right[-1, ],
+    top[-1, ],
+    left[-1, ],
+    bottom[1, ]
+  )
+
+  st_sfc(
+    st_polygon(list(boundary_coordinates)),
+    crs = 4326
+  ) |>
+    st_transform(crs)
+}
+```
+
+```{r}
+#| label: warp-raster-projection
+
+warp_projection <- function(data, crs) {
+  # Keep raster rows between -89.5° and 89.5°
+  y_values <- st_get_dimension_values(data, "y")
+  keep <- which(abs(y_values) <= 89.5)
+
+  trimmed <- data[,, keep, ]
+
+  # Build the target grid from the transformed raster extent
+  target <- st_as_stars(
+    st_bbox(st_transform(trimmed, crs)),
+    dx = 50000,
+    dy = 50000
+  )
+
+  # Reproject using nearest-neighbour resampling
+  warped <- st_warp(
+    trimmed,
+    target,
+    method = "near"
+  )
+
+  warped
+}
+```
+
+```{r}
+#| label: create-projected-rasters
+
+equal_earth_map <- warp_projection(
+  dec_summaries,
+  equal_earth_crs
+)
+
+mollweide_map <- warp_projection(
+  dec_summaries,
+  mollweide_crs
+)
+```
+
+```{r}
+#| label: plot-projection-function
+
+plot_projection <- function(projected_map, projection_title) {
+  ggplot() +
+    geom_stars(
+      data = projected_map,
+      aes(fill = open_ocean_anom)
+    ) +
+    scale_fill_distiller(
+      name = "SST anomaly (°C)",
+      type = "div",
+      palette = "RdYlBu",
+      direction = -1,
+      limits = c(-limit, limit),
+      oob = scales::squish,
+      na.value = "transparent"
+    ) +
+
+    new_scale_fill() +
+
+    geom_stars(
+      data = projected_map,
+      aes(fill = surface)
+    ) +
+    scale_fill_manual(
+      name = "Surface",
+      values = surface_colours,
+      breaks = surface_breaks,
+      labels = surface_labels,
+      drop = FALSE,
+      na.value = "transparent"
+    ) +
+
+    facet_wrap(
+      ~year,
+      ncol = 1
+    ) +
+    coord_equal() +
+    labs(title = projection_title) +
+    theme_minimal() +
+    theme(
+      axis.title = element_blank()
+    )
+}
+```
+
+```{r}
+#| label: plot-equal-earth
+#| fig-width: 10
+#| fig-height: 8
+
+plot_projection(
+  equal_earth_map,
+  "Equal Earth projection"
+)
+```
+
+```{r}
+#| label: plot-mollweide
+#| fig-width: 10
+#| fig-height: 8
+
+plot_projection(
+  mollweide_map,
+  "Mollweide projection"
+)
+```
+
+### a. How does each projection represent the polar regions?
+Both projections reduce the size distortion near the poles compared to the original map. The Equal Earth projection has a flatter shape near the poles, while the Mollweide projection has a more rounded outline.
+
+### b. How clearly does each projection show the equatorial Pacific?
+Both projections show the equatorial Pacific clearly because it is placed in the centre of the map. The warm anomalies in 2009 and cool anomalies in 2010 are easy to compare in both projections.
+
+### c. Which projection uses the rectangular panel space more effectively?
+The Equal Earth projection uses the available plotting space more effectively because it fills more of the rectangular panel. The Mollweide projection leaves more empty space around the corners.
+
+### d. Which projection makes the contrast between the two Decembers more visually prominent?
+Both projections show the differences between December 2009 and December 2010 clearly. However, the Mollweide projection makes the changes in the Pacific Ocean slightly easier to see because it is centred in the map.
+
+### Final projection choice
+Our team chose the Mollweide projection for the final map. Although it leaves more empty space around the corners, it preserves area and makes the El Niño and La Niña patterns in the Pacific Ocean easier to compare.
+
+## 3.12 Build the Two-Panel Anomaly Map
+
+## 3.13 Bin the Anomaly Scale
+
+## 3.14 Reflect on the Visualization
+
+# 4 Completing the Submission
+
+## 4.1 Reflect on AI Use
+Our team used Microsoft Copilot and ChatGPT to support our understanding of the tasks and resolve coding issues. AI was mainly used to explain R functions, troubleshoot errors, and clarify geospatial concepts such as importing NetCDF files with read_stars(), assigning coordinate reference systems using st_set_crs(), checking spatial extents with st_bbox(), and understanding why file sorting and consistent anomaly colour scales are important. It also helped us understand the purpose of each step before we implemented the code ourselves. copilot_group_chat_transcript.pdf
+
+We did not rely on AI to complete the lab for us. Instead, we reviewed its suggestions as a group and compared them with the lab instructions before deciding whether to use them. For example, AI initially suggested using packages such as terra, ncdf4, and tidync to read the NetCDF files, but after checking the assignment requirements, we followed the required approach using the stars package instead. Using AI in this way helped us improve our understanding while ensuring that the final report, code, and explanations reflected our own work and complied with the lab requirements.
+
+## 4.2 Team Roles and Contributions
+
+Jun Kiat served as the Coder and was responsible for creating and maintaining the main .qmd file, importing the datasets, implementing the code, and ensuring that the document rendered successfully.
+
+Adam acted as the Navigator by guiding the team’s progress, interpreting the task requirements, and ensuring that all sections were completed.
+
+Gerald took on the role of Verifier and carried out the required validation checks, including data verification, join checks, scale verification, and legend checks.
+
+Bao Quan served as the Constructive Critic and Reporter by reviewing the team’s explanations, improving the clarity of written responses, and preparing explanations for the team’s plotting decisions.
+
+Jia Jia acted as the AI Liaison by interacting with the chosen AI tool, maintaining the AI interaction log, and evaluating AI suggestions before they were incorporated into the submission.
