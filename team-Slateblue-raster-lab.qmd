@@ -174,3 +174,200 @@ bind_rows(
   .id = "year"
 )
 ```
+
+## 3.6 Derive Surface Classes
+
+```{r}
+# Derive Surface Classes
+
+add_surface_class <- function(monthly) {
+  # start with everything as "open ocean"
+  surface_values <- rep("open ocean", length(monthly$land))
+  
+  # land first
+  surface_values[monthly$land] <- "land"
+  
+  # sea ice: mean_ice >= 0.15 OR anomaly missing
+  surface_values[!monthly$land & 
+                 (monthly$mean_ice >= 0.15 | is.na(monthly$mean_anom))] <- "sea ice"
+  
+  # turn into factor with correct levels
+  surface_values <- factor(surface_values,
+                           levels = c("land", "sea ice", "open ocean"))
+  
+  # reshape back to the same dimensions as land
+  dim(surface_values) <- dim(monthly$land)
+  
+  # add as new attribute
+  monthly$surface <- surface_values
+  monthly
+}
+
+summary_2009 <- add_surface_class(summary_2009)
+summary_2010 <- add_surface_class(summary_2010)
+```
+
+### 3.6 Verifier Task
+``` {r}
+## 1. All surface values are valid and non-missing
+all(summary_2009$surface %in% c("land", "sea ice", "open ocean"))
+all(summary_2010$surface %in% c("land", "sea ice", "open ocean"))
+
+## 2. Every cell with mean_ice >= 0.15 is "sea ice",
+##    and every non-land cell with missing mean_anom is "sea ice"
+all(summary_2009$surface[summary_2009$mean_ice >= 0.15] == "sea ice")
+all(summary_2010$surface[summary_2010$mean_ice >= 0.15] == "sea ice")
+
+all(summary_2009$surface[!summary_2009$land & is.na(summary_2009$mean_anom)] == "sea ice")
+all(summary_2010$surface[!summary_2010$land & is.na(summary_2010$mean_anom)] == "sea ice")
+
+## 3. Every "open ocean" cell has nonmissing mean_anom and mean_ice < 0.15
+all(!is.na(summary_2009$mean_anom[summary_2009$surface == "open ocean"]))
+all(!is.na(summary_2010$mean_anom[summary_2010$surface == "open ocean"]))
+
+all(summary_2009$mean_ice[summary_2009$surface == "open ocean"] < 0.15)
+all(summary_2010$mean_ice[summary_2010$surface == "open ocean"] < 0.15)
+```
+
+## 3.7 Combine the Monthly Summaries Along a Year Dimension
+``` {r}
+# Combine along new dimension
+combined <- c(summary_2009[c("mean_anom", "surface")],
+              summary_2010[c("mean_anom", "surface")],
+              along = 3)
+
+# Rename the third dimension to "year" and assign values
+combined <- st_set_dimensions(
+  combined,
+  which = 3,                # the third dimension
+  names = "year",           # new dimension name
+  values = c(2009, 2010)    # values for that dimension
+)
+
+# Inspect
+st_dimensions(combined)
+```
+
+## 3.7 Verifer
+``` {r}
+
+# 1. Dimensions are named x, y, and year with lengths 1440, 720, and 2
+st_dimensions(combined)
+
+# 2. Year values are 2009 and 2010
+st_get_dimension_values(combined, "year")
+# Expected: 2009 2010
+
+# 3. Attributes are exactly mean_anom and surface
+names(combined)
+# Expected: "mean_anom" "surface"
+
+# 4. Bounding box, resolution, and CRS match the originals
+st_bbox(combined)
+st_dimensions(combined)$x$delta
+st_dimensions(combined)$y$delta
+st_crs(combined)
+
+```
+
+## 3.8 Draft a First Faceted Raster Map
+```{r}
+#| label: draft-faceted-map
+#| fig-width: 10
+#| fig-height: 8
+dec_summaries <- combined
+
+ggplot() +
+  geom_stars(data = dec_summaries, aes(fill = mean_anom)) +
+  facet_wrap(~year, ncol = 1)
+```
+
+## 3.9 Design a Diverging Fill Scale
+
+```{r}
+#| label: create-open-ocean-mask
+
+open_ocean_anom <- dec_summaries$mean_anom
+
+open_ocean_anom[
+  dec_summaries$surface != "open ocean"
+] <- NA_real_
+
+dec_summaries$open_ocean_anom <- open_ocean_anom
+
+# Flatten both years' anomalies into one vector
+anom_values <- c(dec_summaries$open_ocean_anom)
+
+# Compute 99th percentile of absolute values
+limit <- quantile(abs(anom_values), probs = 0.99, na.rm = TRUE)
+
+limit
+```
+
+### 3.9.1 Plot
+```{r}
+#| label: diverging-anomaly-map
+#| fig-width: 10
+#| fig-height: 8
+
+ggplot() +
+  geom_stars(data = dec_summaries, aes(fill = mean_anom)) +
+  facet_wrap(vars(year), ncol = 1) +
+  scale_fill_distiller(
+    name = "SST anomaly (°C)",
+    type = "div",          # diverging palette
+    palette = "RdYlBu",    # ColorBrewer RdYlBu
+    direction = -1,        # reverse so blue = negative, red = positive
+    limits = c(-limit, limit),  # symmetric endpoints
+    oob = squish,          # squish values outside limits
+    na.value = "transparent"    # land/sea ice left neutral
+  ) +
+  theme_minimal()
+```
+
+## 3.10 Add Land and Sea Ice as Surface Layers
+``` {r}
+# Define mapping from year values to labels
+year_labels <- c(
+  "2009" = "December 2009 (El Niño)",
+  "2010" = "December 2010 (La Niña)"
+)
+
+# Define surface colours
+surface_colours <- c(
+  "land"       = "grey70",
+  "sea ice"    = "white",
+  "open ocean" = "transparent"
+)
+
+surface_colours
+```
+
+``` {r}
+# Only land and sea ice should appear in the legend
+surface_breaks <- c("land", "sea ice")
+
+# Custom labels for those categories
+surface_labels <- c(
+  "land"    = "Land",
+  "sea ice" = "Sea-ice concentration ≥ 15%"
+)
+
+surface_breaks
+surface_labels
+```
+
+### 3.10.1 Plot
+``` {r}
+ggplot() +
+  geom_stars(data = dec_summaries, aes(fill = surface)) +
+  scale_fill_manual(
+    values = surface_colours,
+    breaks = surface_breaks,
+    labels = surface_labels,
+    drop = FALSE,
+    na.value = "transparent"
+  )
+
+```
+
