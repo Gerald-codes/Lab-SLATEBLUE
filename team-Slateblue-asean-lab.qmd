@@ -1,0 +1,100 @@
+---
+title: "Week 12 Lab: Raster Maps of Sea Surface Temperature Anomalies"
+author: "Team SLATEBLUE"
+date: "2026-07-21"
+format:
+  html:
+    toc: true
+    toc-depth: 3
+    number-sections: false
+    theme: cosmo
+    code-fold: false
+    code-tools: true
+    df-print: paged
+execute:
+  echo: true
+  warning: false
+  message: false
+---
+
+## 3.2 Start Coding
+```{r}
+#| label: setup
+#| message: false
+library(dplyr)
+library(forcats)
+library(ggplot2)
+library(lubridate)
+library(purrr)
+library(readr)
+library(stringr)
+library(tibble)
+library(tidyverse)
+library(stars)
+library(scales)
+library(ggnewscale)
+library(units)
+```
+
+## 3.3 Import the Daily Grids as stars Data Cubes
+```{r}
+#| label: locate-daily-files
+
+files_2009 <- list.files(
+  "oisst_lab_data/oisst_daily/el_nino_2009-12",
+  pattern = "\\.nc$",
+  full.names = TRUE
+) |>
+  sort()
+
+files_2010 <- list.files(
+  "oisst_lab_data/oisst_daily/la_nina_2010-12",
+  pattern = "\\.nc$",
+  full.names = TRUE
+) |>
+  sort()
+
+length(files_2009)
+
+stopifnot(
+  length(files_2009) == 31,
+  length(files_2010) == 31
+)
+
+c(
+  first_2009 = basename(first(files_2009)),
+  last_2009 = basename(last(files_2009)),
+  first_2010 = basename(first(files_2010)),
+  last_2010 = basename(last(files_2010))
+)
+```
+
+### 3.3.1 Inspect Imported Data via read_star
+```{r}
+# December 2009: 31 daily grids
+dec_2009 <- read_stars(files_2009, sub = c("anom", "ice"), along="time")
+
+# December 2010: 31 daily grids
+dec_2010 <- read_stars(files_2010, sub = c("anom", "ice"), along="time")
+
+# Inspect
+dec_2009
+dec_2010
+```
+
+## 3.4 Establish the Coordinate Reference System
+``` {r}
+# Assign EPSG:4326 to both stars objects
+dec_2009 <- st_set_crs(dec_2009, 4326)
+dec_2010 <- st_set_crs(dec_2010, 4326)
+
+# Check CRS
+st_crs(dec_2009)
+st_crs(dec_2010)
+
+# check boundary
+st_bbox(dec_2009)
+st_bbox(dec_2010)
+```
+
+## 3.5 Calculate monthly summaries
