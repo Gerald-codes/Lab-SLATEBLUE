@@ -371,3 +371,19 @@ ggplot() +
 
 ```
 
+## 3.11 Compare Equal-Area World Projections
+``` {r}
+# Equal Earth projection (central meridian at 180°)
+equal_earth_crs <- st_crs(
+  "+proj=eqearth +lon_0=180 +ellps=WGS84 +R_A +units=m +no_defs +type=crs"
+)
+
+# Mollweide projection (central meridian at 180°)
+mollweide_crs <- st_crs(
+  "+proj=moll +lon_0=180 +ellps=WGS84 +R_A +units=m +no_defs +type=crs"
+)
+
+equal_earth_crs
+mollweide_crs
+```
+
