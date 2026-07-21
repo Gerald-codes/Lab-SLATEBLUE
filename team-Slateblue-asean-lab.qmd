@@ -98,3 +98,79 @@ st_bbox(dec_2010)
 ```
 
 ## 3.5 Calculate monthly summaries
+## Monthly cell summaries
+
+```{r}
+#| label: monthly-summary-function
+
+summarise_month <- function(daily_cube) {
+  mean_anom <- st_apply(
+    daily_cube["anom"],
+    c("x", "y"),
+    mean,
+    na.rm = TRUE
+  )
+  names(mean_anom) <- "mean_anom"
+
+  ice_zero <- daily_cube["ice"]
+  ice_zero[[1]][is.na(ice_zero[[1]])] <- 0
+
+  mean_ice <- st_apply(
+    ice_zero,
+    c("x", "y"),
+    mean
+  )
+  names(mean_ice) <- "mean_ice"
+
+  result <- c(mean_anom, mean_ice) |>
+    mutate(
+      land = is.nan(mean_anom) & mean_ice == 0,
+      mean_ice = replace(mean_ice, land, NA_real_)
+    )
+
+  result[c("land", "mean_anom", "mean_ice")]
+}
+```
+
+```{r}
+#| label: calculate-monthly-summaries
+
+summary_2009 <- summarise_month(dec_2009)
+summary_2010 <- summarise_month(dec_2010)
+```
+
+## Verifier Task
+```{r}
+#| label: verify-monthly-summaries
+
+verify_monthly_summary <- function(monthly, daily) {
+  non_land_ice <- monthly$mean_ice[!monthly$land]
+
+  stopifnot(
+    all(dim(monthly) == c(1440, 720)),
+    identical(names(st_dimensions(monthly)), c("x", "y")),
+    identical(names(monthly), c("land", "mean_anom", "mean_ice")),
+    !anyNA(monthly$land),
+    all(is.na(monthly$mean_ice) == monthly$land),
+    min(non_land_ice, na.rm = TRUE) >= 0,
+    max(non_land_ice, na.rm = TRUE) <= 1,
+    isTRUE(all.equal(st_bbox(monthly), st_bbox(daily))),
+    isTRUE(all.equal(st_res(monthly), st_res(daily))),
+    st_crs(monthly) == st_crs(daily)
+  )
+
+  tibble(
+    dimensions = paste(dim(monthly), collapse = " × "),
+    land_cells = sum(monthly$land),
+    non_land_cells = sum(!monthly$land),
+    minimum_ice = min(non_land_ice, na.rm = TRUE),
+    maximum_ice = max(non_land_ice, na.rm = TRUE)
+  )
+}
+
+bind_rows(
+  `2009` = verify_monthly_summary(summary_2009, dec_2009),
+  `2010` = verify_monthly_summary(summary_2010, dec_2010),
+  .id = "year"
+)
+```
