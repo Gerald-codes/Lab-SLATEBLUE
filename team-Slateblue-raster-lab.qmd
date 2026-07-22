@@ -1,7 +1,7 @@
 ---
 title: "Week 12 Lab: Raster Maps of Sea Surface Temperature Anomalies"
 author: "Team SLATEBLUE"
-date: "2026-07-21"
+date: "2026-07-22"
 format:
   html:
     toc: true
@@ -308,7 +308,7 @@ all(
 )
 ```
 
-Both monthly summary objects contain only the three valid surface classes: land, sea ice, and open ocean, with no missing classifications. All cells with a monthly mean sea-ice concentration of at least 0.15, as well as non-land cells with a missing monthly anomaly, are classified as sea ice. Every open ocean cell has a nonmissing anomaly and a monthly mean sea-ice concentration below 0.15.
+Both monthly summary objects contain only the three valid surface classes: land, sea ice, and open ocean, with no missing classifications. All cells with a monthly mean sea-ice concentration of at least 0.15, as well as non-land cells with a missing monthly anomaly, are classified as sea ice. Every open ocean cell has a non-missing anomaly and a monthly mean sea-ice concentration below 0.15.
 
 ## 3.7 Combine the Monthly Summaries Along a Year Dimension
 ``` {r}
@@ -369,7 +369,7 @@ ggplot() +
 ```
 
 Shortcoming List:
-1. The default colour scale is not centred at 0 degree celsius, making it difficult to distinguish positive anomalies from negative anomalies.
+1. The default colour scale is not centred at 0 °C, making it difficult to distinguish positive anomalies from negative anomalies.
 2. Land and sea ice are both displayed in grey, so they cannot be distinguished from one another.
 3. The map lacks a title, subtitle and contextual information, making it difficult for readers to understand what the map represents.
 4. Regions near the poles appear much larger than comparable regions near the equator, making comparisons of the spatial extent of anomalies across different latitudes misleading.
@@ -692,23 +692,389 @@ Both projections show the equatorial Pacific clearly because it is placed in the
 The Equal Earth projection uses the available plotting space more effectively because it fills more of the rectangular panel. The Mollweide projection leaves more empty space around the corners.
 
 ### d. Which projection makes the contrast between the two Decembers more visually prominent?
-Both projections show the differences between December 2009 and December 2010 clearly. However, the Mollweide projection makes the changes in the Pacific Ocean slightly easier to see because it is centred in the map.
+Both projections show the differences between December 2009 and December 2010 clearly. However, the Mollweide projection makes the Pacific pattern slightly easier to compare because its rounded global shape gives greater visual emphasis to the central equatorial region.
 
 ### Final projection choice
 Our team chose the Mollweide projection for the final map. Although it leaves more empty space around the corners, it preserves area and makes the El Niño and La Niña patterns in the Pacific Ocean easier to compare.
 
 ## 3.12 Build the Two-Panel Anomaly Map
 
+```{r}
+#| label: prepare-final-map-elements
+
+# Create the Mollweide map boundary
+mollweide_boundary <- create_world_boundary(mollweide_crs)
+
+# Create a line following the equator
+equator <- st_sfc(
+  st_linestring(
+    cbind(
+      seq(0.001, 359.999, by = 1),
+      0
+    )
+  ),
+  crs = 4326
+) |>
+  st_transform(mollweide_crs)
+
+# Labels for the two facet panels
+year_labels <- c(
+  "2009" = "December 2009 (El Niño)",
+  "2010" = "December 2010 (La Niña)"
+)
+```
+
+```{r}
+#| label: final-continuous-anomaly-map
+#| fig-width: 11
+#| fig-height: 9
+
+continuous_map <- ggplot() +
+
+  # Open-ocean anomaly layer
+  geom_stars(
+    data = mollweide_map,
+    aes(fill = open_ocean_anom)
+  ) +
+  scale_fill_distiller(
+    name = "SST anomaly (°C)",
+    type = "div",
+    palette = "RdYlBu",
+    direction = -1,
+    limits = c(-limit, limit),
+    oob = scales::squish,
+    na.value = "transparent",
+    guide = guide_colourbar(
+      order = 1,
+      frame.colour = "grey20",
+      frame.linewidth = 0.4,
+      ticks.colour = "grey20"
+    )
+  ) +
+
+  # Start a second fill scale
+  new_scale_fill() +
+
+  # Land and sea-ice surface layer
+  geom_stars(
+    data = mollweide_map,
+    aes(fill = surface)
+  ) +
+  scale_fill_manual(
+    name = "Surface",
+    values = surface_colours,
+    breaks = surface_breaks,
+    labels = surface_labels,
+    drop = FALSE,
+    na.value = "transparent",
+    guide = guide_legend(
+      order = 2,
+      override.aes = list(
+        colour = "grey20",
+        linewidth = 0.4
+      )
+    )
+  ) +
+
+  # Draw the equator and projection boundary
+  geom_sf(
+    data = equator,
+    colour = "grey35",
+    linewidth = 0.3,
+    alpha = 0.6,
+    inherit.aes = FALSE
+  ) +
+  geom_sf(
+    data = mollweide_boundary,
+    fill = NA,
+    colour = "grey20",
+    linewidth = 0.4,
+    inherit.aes = FALSE
+  ) +
+
+  # Create one vertically stacked panel per year
+  facet_wrap(
+    ~year,
+    ncol = 1,
+    labeller = labeller(
+      year = as_labeller(year_labels)
+    )
+  ) +
+
+  # Keep the Mollweide shape and remove geographic grid labels
+  coord_sf(
+    crs = mollweide_crs,
+    datum = NA,
+    expand = FALSE
+  ) +
+
+  labs(
+    title = "Sea-Surface Temperature Anomalies",
+    subtitle = paste0(
+      "December 2009 and 2010 compared with the ",
+      "1971–2000 climatological average"
+    ),
+    caption = "Source: NOAA Optimum Interpolation Sea Surface Temperature (OISST)"
+  ) +
+
+  theme_void() +
+  theme(
+    plot.title = element_text(
+      face = "bold",
+      size = 17
+    ),
+    plot.subtitle = element_text(
+      size = 11,
+      margin = margin(b = 10)
+    ),
+    plot.caption = element_text(
+      size = 9,
+      colour = "grey35"
+    ),
+    strip.text = element_text(
+      face = "bold",
+      size = 11,
+      margin = margin(t = 4, b = 4)
+    ),
+    panel.spacing = unit(0.8, "lines"),
+    legend.position = "right",
+    legend.box = "vertical",
+    legend.title = element_text(face = "bold"),
+    plot.margin = margin(10, 10, 10, 10)
+  )
+
+continuous_map
+```
+
 ## 3.13 Bin the Anomaly Scale
 
+```{r}
+#| label: create-anomaly-bins
+
+# Create whole-degree boundaries between -limit and +limit
+bounded_breaks <- seq(
+  from = -limit,
+  to = limit,
+  by = 1
+)
+
+# Add an open-ended class at each side
+anomaly_breaks <- c(
+  -Inf,
+  bounded_breaks,
+  Inf
+)
+
+# Create readable labels for the classes
+bounded_labels <- paste0(
+  bounded_breaks[-length(bounded_breaks)],
+  " to < ",
+  bounded_breaks[-1],
+  " °C"
+)
+
+anomaly_labels <- c(
+  paste0("< ", -limit, " °C"),
+  bounded_labels,
+  paste0("≥ ", limit, " °C")
+)
+
+anomaly_labels
+```
+
+```{r}
+#| label: add-binned-anomaly-attribute
+
+# Make a copy so the continuous map remains unchanged
+mollweide_binned_map <- mollweide_map
+
+# Convert the anomaly array into a vector before using cut()
+binned_anom <- cut(
+  as.vector(mollweide_binned_map$open_ocean_anom),
+  breaks = anomaly_breaks,
+  labels = anomaly_labels,
+  right = FALSE,
+  include.lowest = TRUE
+)
+
+# Restore the raster dimensions
+dim(binned_anom) <- dim(
+  mollweide_binned_map$open_ocean_anom
+)
+
+# Add the binned anomaly as a new raster attribute
+mollweide_binned_map$binned_anom <- binned_anom
+```
+
+```{r}
+#| label: verify-anomaly-bins
+
+# Inspect the factor levels
+levels(mollweide_binned_map$binned_anom)
+
+# Confirm that all non-missing open-ocean anomalies received a class
+all(
+  !is.na(
+    mollweide_binned_map$binned_anom[
+      !is.na(mollweide_binned_map$open_ocean_anom)
+    ]
+  )
+)
+
+# Confirm that masked cells remain missing
+all(
+  is.na(
+    mollweide_binned_map$binned_anom[
+      is.na(mollweide_binned_map$open_ocean_anom)
+    ]
+  )
+)
+```
+
+```{r}
+#| label: final-binned-anomaly-map
+#| fig-width: 11
+#| fig-height: 9
+
+binned_map <- ggplot() +
+
+  # Binned open-ocean anomaly layer
+  geom_stars(
+    data = mollweide_binned_map,
+    aes(fill = binned_anom)
+  ) +
+  scale_fill_brewer(
+    name = "SST anomaly (°C)",
+    type = "div",
+    palette = "RdYlBu",
+    direction = -1,
+    drop = FALSE,
+    na.translate = FALSE,
+    na.value = "transparent",
+    guide = guide_legend(
+      order = 1,
+      reverse = TRUE,
+      override.aes = list(
+        colour = "grey20",
+        linewidth = 0.4
+      )
+    )
+  ) +
+
+  new_scale_fill() +
+
+  # Keep the same surface layer as Section 3.12
+  geom_stars(
+    data = mollweide_binned_map,
+    aes(fill = surface)
+  ) +
+  scale_fill_manual(
+    name = "Surface",
+    values = surface_colours,
+    breaks = surface_breaks,
+    labels = surface_labels,
+    drop = FALSE,
+    na.value = "transparent",
+    guide = guide_legend(
+      order = 2,
+      override.aes = list(
+        colour = "grey20",
+        linewidth = 0.4
+      )
+    )
+  ) +
+
+  # Keep the same equator and boundary
+  geom_sf(
+    data = equator,
+    colour = "grey35",
+    linewidth = 0.3,
+    alpha = 0.6,
+    inherit.aes = FALSE
+  ) +
+  geom_sf(
+    data = mollweide_boundary,
+    fill = NA,
+    colour = "grey20",
+    linewidth = 0.4,
+    inherit.aes = FALSE
+  ) +
+
+  facet_wrap(
+    ~year,
+    ncol = 1,
+    labeller = labeller(
+      year = as_labeller(year_labels)
+    )
+  ) +
+
+  coord_sf(
+    crs = mollweide_crs,
+    datum = NA,
+    expand = FALSE
+  ) +
+
+  labs(
+    title = "Sea-Surface Temperature Anomalies",
+    subtitle = paste0(
+      "December 2009 and 2010 compared with the ",
+      "1971–2000 climatological average"
+    ),
+    caption = "Source: NOAA Optimum Interpolation Sea Surface Temperature (OISST)"
+  ) +
+
+  theme_void() +
+  theme(
+    plot.title = element_text(
+      face = "bold",
+      size = 17
+    ),
+    plot.subtitle = element_text(
+      size = 11,
+      margin = margin(b = 10)
+    ),
+    plot.caption = element_text(
+      size = 9,
+      colour = "grey35"
+    ),
+    strip.text = element_text(
+      face = "bold",
+      size = 11,
+      margin = margin(t = 4, b = 4)
+    ),
+    panel.spacing = unit(0.8, "lines"),
+    legend.position = "right",
+    legend.box = "vertical",
+    legend.title = element_text(face = "bold"),
+    plot.margin = margin(10, 10, 10, 10)
+  )
+
+binned_map
+```
+
 ## 3.14 Reflect on the Visualization
+
+### a. Difference between December 2009 El Niño and December 2010 La Niña
+
+The December 2009 map shows a clear band of warm anomalies along the equatorial Pacific, especially in the central and eastern Pacific. In contrast, December 2010 shows a large area of cool anomalies across the same region. The 2009 map also contains stronger warm areas in parts of the southern Pacific, while the 2010 map has more widespread cooling across the tropical Pacific. This shows the opposite ocean temperature patterns associated with El Niño and La Niña.
+
+### b. Gains and losses from showing only open ocean and grouping sea ice
+
+Showing anomalies only over open ocean makes the temperature patterns easier to see because land and sea ice do not interfere with the colour scale. Grouping sea ice into one class also keeps the map and legend simple. However, the reader cannot see differences in sea-ice concentration above the 15% threshold. The map also does not show anomaly values beneath sea ice, so some information in the polar regions is hidden.
+
+### c. Continuous scale compared with binned scale
+
+The binned scale is better for comparing the general extent of warm and cool anomalies because the clear classes make similar regions easier to identify across both panels. It is also easier to tell which temperature range each colour represents. However, the binned scale removes small differences within each class and makes the map look less detailed. The continuous scale preserves gradual changes and fine spatial patterns, but readers need to estimate values from subtle colour differences.
 
 # 4 Completing the Submission
 
 ## 4.1 Reflect on AI Use
-Our team used Microsoft Copilot and ChatGPT to support our understanding of the tasks and resolve coding issues. AI was mainly used to explain R functions, troubleshoot errors, and clarify geospatial concepts such as importing NetCDF files with read_stars(), assigning coordinate reference systems using st_set_crs(), checking spatial extents with st_bbox(), and understanding why file sorting and consistent anomaly colour scales are important. It also helped us understand the purpose of each step before we implemented the code ourselves. copilot_group_chat_transcript.pdf
+Our team used Microsoft Copilot to support our understanding of the tasks and resolve coding issues. AI was mainly used to explain R functions, troubleshoot errors, and clarify geospatial concepts such as importing NetCDF files with read_stars(), assigning coordinate reference systems using st_set_crs(), checking spatial extents with st_bbox(), and understanding why file sorting and consistent anomaly colour scales are important. It also helped us understand the purpose of each step before we implemented the code ourselves. copilot_group_chat_transcript.pdf
 
 We did not rely on AI to complete the lab for us. Instead, we reviewed its suggestions as a group and compared them with the lab instructions before deciding whether to use them. For example, AI initially suggested using packages such as terra, ncdf4, and tidync to read the NetCDF files, but after checking the assignment requirements, we followed the required approach using the stars package instead. Using AI in this way helped us improve our understanding while ensuring that the final report, code, and explanations reflected our own work and complied with the lab requirements.
+
+The Copilot interaction log is provided in
+[ai_log.pdf](ai_log.pdf).
 
 ## 4.2 Team Roles and Contributions
 
@@ -716,7 +1082,7 @@ Jun Kiat served as the Coder and was responsible for creating and maintaining th
 
 Adam acted as the Navigator by guiding the team’s progress, interpreting the task requirements, and ensuring that all sections were completed.
 
-Gerald took on the role of Verifier and carried out the required validation checks, including data verification, join checks, scale verification, and legend checks.
+Gerald took on the role of Verifier and carried out the required validation checks, including data verification, scale verification, and legend checks.
 
 Bao Quan served as the Constructive Critic and Reporter by reviewing the team’s explanations, improving the clarity of written responses, and preparing explanations for the team’s plotting decisions.
 
